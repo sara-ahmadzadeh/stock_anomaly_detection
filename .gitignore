@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+
+
+# Virtual Environment
+stock_anomaly/
+
+
+
+# Data files 
+data/raw/
+data/processed/
+*.csv
+*.xlsx
+
+
+# IDE settings
+.vscode/
+.idea/
+
+
+# macOS
+.DS_Store
