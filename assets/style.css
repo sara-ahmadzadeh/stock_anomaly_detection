@@ -1,0 +1,71 @@
+/* assets/style.css */
+
+/* Stat boxes */
+.stat-box {
+    background-color: #2c3e50;
+    padding: 20px;
+    border-radius: 10px;
+    text-align: center;
+    min-width: 200px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    border: 1px solid #34495e;
+}
+
+.stat-box h3 {
+    margin: 0 0 10px 0;
+    color: #95a5a6;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.stat-box h2 {
+    margin: 0;
+    font-size: 32px;
+    font-weight: bold;
+}
+
+/* Custom scrollbar for alerts */
+#anomaly-alerts::-webkit-scrollbar {
+    width: 8px;
+}
+
+#anomaly-alerts::-webkit-scrollbar-track {
+    background: #34495e;
+    border-radius: 5px;
+}
+
+#anomaly-alerts::-webkit-scrollbar-thumb {
+    background: #e74c3c;
+    border-radius: 5px;
+}
+
+#anomaly-alerts::-webkit-scrollbar-thumb:hover {
+    background: #c0392b;
+}
+
+/* Dropdown styling */
+.Select-control {
+    background-color: #2c3e50 !important;
+    border-color: #34495e !important;
+}
+
+.Select-menu-outer {
+    background-color: #2c3e50 !important;
+}
+
+.Select-option {
+    background-color: #2c3e50 !important;
+    color: white !important;
+}
+
+.Select-option:hover {
+    background-color: #34495e !important;
+}
+
+/* Loading animation */
+._dash-loading {
+    text-align: center;
+    margin-top: 50px;
+    color: white;
+}
