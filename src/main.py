@@ -89,9 +89,11 @@ def main():
     print("=" * 60)
     
     # Configuration
-    SYMBOLS = ['AAPL', 'GOOGL', 'MSFT', 'AMZN', 'TSLA']
+    #SYMBOLS = ['AAPL', 'GOOGL', 'MSFT', 'AMZN', 'TSLA']
+    # Change from stocks to crypto
+    SYMBOLS = ['BTC-USD', 'ETH-USD', 'SOL-USD', 'DOGE-USD', 'ADA-USD']
     CHECK_INTERVAL = 120  # Check every 2 minutes
-    ZSCORE_THRESHOLD = 4.0
+    ZSCORE_THRESHOLD = 2.5
     WINDOW_SIZE = 30
     
     print(f"\n🔧 Configuration:")
@@ -145,11 +147,11 @@ def main():
     # Start dashboard
     print("\n" + "=" * 60)
     print("🎯 System Ready!")
-    print(f"📊 Open: http://localhost:8051")
+    print(f"📊 Open: http://localhost:8052")
     print("=" * 60)
     
     try:
-        dashboard.run(debug=False, port=8051)
+        dashboard.run(debug=False, port=8052)
     except KeyboardInterrupt:
         print("\n\n👋 Shutting down...")
 
