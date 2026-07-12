@@ -7,110 +7,92 @@ import time
 import threading
 from datetime import datetime
 
-def monitoring_worker(streamer, detector, alert_manager, dashboard, interval=60):
+def monitoring_worker(streamer, detector, alert_manager, dashboard, interval=120):
     """
     Background worker that continuously monitors stocks for anomalies.
-    Runs in a separate thread so dashboard remains responsive.
     """
     print("🔍 Starting background monitoring...")
-    previous_prices = {}
     
     while True:
         try:
-            # Fetch latest data for all symbols
+            # Step 1: Get latest data
             latest_data = streamer.fetch_latest()
             
-            if not latest_data.empty:
-                print(f"\n📊 [{datetime.now().strftime('%H:%M:%S')}] Checking {len(streamer.symbols)} stocks...")
+            if latest_data.empty:
+                print("⚠️  No data received. Retrying...")
+                time.sleep(interval)
+                continue
+            
+            print(f"\n📊 [{datetime.now().strftime('%H:%M:%S')}] Checking stocks...")
+            
+            # Step 2: Check each stock
+            for symbol in streamer.symbols:
+                if symbol not in latest_data.index:
+                    continue
                 
-                for symbol in streamer.symbols:
-                    if symbol in latest_data.index:
-                        current_price = latest_data.loc[symbol, 'close']
-                        current_volume = latest_data.loc[symbol, 'volume']
-                        
-                        # Calculate price change if we have previous data
-                        if symbol in previous_prices and previous_prices[symbol] != 0:
-                            price_change_pct = ((current_price - previous_prices[symbol]) / 
-                                              previous_prices[symbol]) * 100
-                        else:
-                            price_change_pct = 0
-                        
-                        # Update previous price
-                        previous_prices[symbol] = current_price
-                        
-                        # Detect anomaly in price
-                        price_result = detector.detect_anomalies(symbol, current_price)
-                        
-                        # Also check volume for confirmation
-                        volume_result = detector.detect_anomalies(f"{symbol}_vol", current_volume)
-                        
-                        # Combined anomaly: unusual price with unusual volume
-                        is_confirmed_anomaly = (price_result['is_anomaly'] and 
-                                               volume_result['is_anomaly'])
-                        
-                        if is_confirmed_anomaly:
-                            print(f"🚨 ANOMALY: {symbol} | Price Z-Score: {price_result['z_score']} | "
-                                  f"Volume Z-Score: {volume_result['z_score']} | "
-                                  f"Direction: {price_result['direction']} | "
-                                  f"Change: {price_change_pct:.2f}%")
-                            
-                            # Prepare anomaly data for alerting
-                            anomaly_data = {
-                                'symbol': symbol,
-                                'timestamp': datetime.now(),
-                                'z_score': price_result['z_score'],
-                                'volume_z_score': volume_result['z_score'],
-                                'direction': price_result['direction'],
-                                'current_price': current_price,
-                                'current_volume': current_volume,
-                                'price_change_pct': price_change_pct
-                            }
-                            
-                            # Add to dashboard's anomaly log
-                            dashboard.anomaly_log.append(anomaly_data)
-                            
-                            # Keep log manageable
-                            if len(dashboard.anomaly_log) > 100:
-                                dashboard.anomaly_log = dashboard.anomaly_log[-100:]
-                            
-                            # Send alerts
-                            try:
-                                alert_manager.send_email_alert(anomaly_data)
-                                alert_manager.send_slack_alert(anomaly_data)
-                            except Exception as e:
-                                print(f"⚠️ Alert sending failed: {e}")
-                        
-                        elif price_result['is_anomaly']:
-                            print(f"⚠️  Price anomaly (unconfirmed): {symbol} | "
-                                  f"Z-Score: {price_result['z_score']} | "
-                                  f"Volume normal")
-                        else:
-                            print(f"✅ Normal: {symbol} | "
-                                  f"Z-Score: {price_result['z_score']:.2f}")
+                current_price = latest_data.loc[symbol, 'close']
+                current_volume = latest_data.loc[symbol, 'volume']
                 
-            else:
-                print("⚠️  No data received from API. Will retry...")
+                # Step 3: ONE LINE detects anomalies (price AND volume)
+                result = detector.multi_metric_detection(
+                    symbol, 
+                    current_price, 
+                    current_volume
+                )
+                
+                # Step 4: If anomaly detected, handle it
+                if result['is_anomaly']:
+                    print(f"🚨 ANOMALY: {symbol} | "
+                          f"Price Z-Score: {result['price_zscore']} | "
+                          f"Volume Z-Score: {result['volume_zscore']} | "
+                          f"Direction: {result['price_direction']} | "
+                          f"Signal Strength: {result['signal_strength']}")
+                    
+                    # Prepare alert data
+                    anomaly_data = {
+                        'symbol': symbol,
+                        'timestamp': datetime.now(),
+                        'z_score': result['price_zscore'],
+                        'direction': result['price_direction'],
+                        'current_price': current_price,
+                        'signal_strength': result['signal_strength']
+                    }
+                    
+                    # Log to dashboard
+                    dashboard.anomaly_log.append(anomaly_data)
+                    if len(dashboard.anomaly_log) > 100:
+                        dashboard.anomaly_log = dashboard.anomaly_log[-100:]
+                    
+                    # Send alerts
+                    try:
+                        alert_manager.send_email_alert(anomaly_data)
+                        alert_manager.send_slack_alert(anomaly_data)
+                    except Exception as e:
+                        print(f"⚠️ Alert failed: {e}")
+                else:
+                    print(f"✅ Normal: {symbol} | "
+                          f"Price Z-Score: {result['price_zscore']:.2f} | "
+                          f"Volume Z-Score: {result['volume_zscore']:.2f}")
             
             # Wait before next check
             time.sleep(interval)
             
         except Exception as e:
-            print(f"❌ Monitoring error: {e}")
-            print("Retrying in 30 seconds...")
+            print(f"❌ Error: {e}")
             time.sleep(30)
 
 
 def main():
-    """Main entry point for the anomaly detection system."""
+    """Main entry point."""
     print("=" * 60)
     print("📈 STOCK MARKET ANOMALY DETECTION SYSTEM")
     print("=" * 60)
     
     # Configuration
     SYMBOLS = ['AAPL', 'GOOGL', 'MSFT', 'AMZN', 'TSLA']
-    CHECK_INTERVAL = 120  # Check every 2 minutes instead of 60 seconds
-    ZSCORE_THRESHOLD = 4.0  # Slightly higher threshold to reduce noise
-    WINDOW_SIZE = 30  # Number of data points for rolling statistics
+    CHECK_INTERVAL = 120  # Check every 2 minutes
+    ZSCORE_THRESHOLD = 4.0
+    WINDOW_SIZE = 30
     
     print(f"\n🔧 Configuration:")
     print(f"   Symbols: {', '.join(SYMBOLS)}")
@@ -119,62 +101,57 @@ def main():
     print(f"   Rolling Window: {WINDOW_SIZE} periods")
     
     # Initialize components
-    print("\n🚀 Initializing components...")
+    print("\n🚀 Initializing...")
     
-    # Use 1m interval for streaming
     streamer = StockDataStreamer(SYMBOLS, interval="1m")
-    print("   ✅ Data streamer initialized")
+    print("   ✅ Data streamer ready")
     
     detector = AnomalyDetector(window_size=WINDOW_SIZE, threshold=ZSCORE_THRESHOLD)
-    print("   ✅ Anomaly detector initialized")
+    print("   ✅ Anomaly detector ready")
     
     alert_manager = AlertManager()
-    print("   ✅ Alert manager initialized")
+    print("   ✅ Alert manager ready")
     
     dashboard = AnomalyDashboard(streamer, detector)
-    print("   ✅ Dashboard initialized")
+    print("   ✅ Dashboard ready")
     
-    # Start background monitoring in separate thread
-    monitor_thread = threading.Thread(
-        target=monitoring_worker,
-        args=(streamer, detector, alert_manager, dashboard, CHECK_INTERVAL),
-        daemon=True  # Thread will exit when main program exits
-    )
-    monitor_thread.start()
-    
-    # Load initial historical data for baseline
-    print("\n📥 Loading historical data for baseline...")
+    # Load historical data for baseline
+    print("\n📥 Loading historical data...")
     try:
         historical_data = streamer.historical_data(period="5d")
         for symbol, data in historical_data.items():
             if not data.empty:
-                # Pre-fill detector with historical prices
-                prices = data['Close'].tolist()
-                for price in prices[-WINDOW_SIZE:]:  # Use last window_size prices
-                    detector.history[symbol] = detector.history.get(symbol, [])
-                    detector.history[symbol].append(price)
-                    if len(detector.history[symbol]) > WINDOW_SIZE:
-                        detector.history[symbol] = detector.history[symbol][-WINDOW_SIZE:]
+                prices = data['Close'].tolist()[-WINDOW_SIZE:]
+                volumes = data['Volume'].tolist()[-WINDOW_SIZE:]
                 
-                print(f"   ✅ {symbol}: Loaded {len(prices)} historical data points")
-            else:
-                print(f"   ⚠️ {symbol}: No historical data available")
+                # Fill price history
+                detector.history[symbol] = prices
+                
+                # Fill volume history (using symbol_vol as key)
+                detector.history[f"{symbol}_vol"] = volumes
+                
+                print(f"   ✅ {symbol}: {len(prices)} data points loaded")
     except Exception as e:
         print(f"   ⚠️  Could not load historical data: {e}")
-        print("   Starting with live data only...")
     
-    # Start dashboard (this will block the main thread)
+    # Start monitoring in background
+    monitor_thread = threading.Thread(
+        target=monitoring_worker,
+        args=(streamer, detector, alert_manager, dashboard, CHECK_INTERVAL),
+        daemon=True
+    )
+    monitor_thread.start()
+    
+    # Start dashboard
     print("\n" + "=" * 60)
-    print("🎯 System Ready! Dashboard starting...")
+    print("🎯 System Ready!")
+    print(f"📊 Open: http://localhost:8051")
     print("=" * 60)
-    print(f"\n📊 Open your browser at: http://localhost:8050")
-    print("Press Ctrl+C to stop the system\n")
     
     try:
-        dashboard.run(debug=False, port=8050)
+        dashboard.run(debug=False, port=8051)
     except KeyboardInterrupt:
         print("\n\n👋 Shutting down...")
-        print("Thank you for using the Anomaly Detection System!")
 
 
 if __name__ == "__main__":
