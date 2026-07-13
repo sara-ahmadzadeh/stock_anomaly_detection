@@ -1,19 +1,74 @@
-# Project Name: "Real-Time Stock Market Anomaly Detection System"
+# 📈 Real-Time Market Anomaly Detection System
 
-## What It Builds:
-A live monitoring system that ingests stock price data, detects unusual price movements using statistical methods, visualizes anomalies on an interactive dashboard, and sends email/Slack alerts when anomalies occur.
+A production-ready monitoring system that detects unusual market activity in real-time using statistical analysis. Supports both traditional stocks and cryptocurrency markets through a pluggable data source architecture.
 
-## Business Problem It Solves:
-Financial analysts and traders need to quickly identify unusual market activity that could indicate breaking news, market manipulation, or trading opportunities. Instead of staring at screens all day, this system surfaces only the truly unusual events.
+[![Python](https://img.shields.io/badge/Python-3.8%2B-blue)](https://www.python.org/)
+[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+[![Dashboard](https://img.shields.io/badge/Dashboard-Live-brightgreen)](http://localhost:8050)
 
-## Key Features
-- Real-time data streaming from Yahoo Finance
-- Multi-metric anomaly detection (price + volume)
-- Adaptive thresholds using rolling statistics
-- Interactive dashboard with candlestick charts
-- Automated email/Slack alerts
-- False positive reduction through volume confirmation
+<p align="center">
+  <img src="assets/dashboard_demo.gif" alt="Dashboard Demo" width="800"/>
+</p>
 
-## Quick Start
-1. Clone the repository
-2. Install dependencies: `pip install -r requirements.txt`
+## 🎯 Overview
+
+Financial analysts and traders spend hours watching screens for unusual market movements. This system automates that process by:
+
+- **Ingesting** real-time market data every 2 minutes
+- **Detecting** anomalies using Modified Z-Score statistical analysis
+- **Visualizing** results on an interactive dashboard
+- **Alerting** stakeholders via email when anomalies occur
+
+The system is designed to surface only truly unusual events, reducing noise and false positives that plague simple threshold-based monitoring.
+
+
+## ✨ Features
+
+### 🔌 Multi-Source Data Ingestion
+- **Stocks**: Real-time data from Yahoo Finance (AAPL, GOOGL, MSFT, AMZN, TSLA)
+- **Crypto**: 24/7 data from CoinGecko API (BTC, ETH, SOL, DOGE, ADA, XRP)
+- **Switch instantly** by changing one line in `config.py`
+- **Extensible**: Add new data sources without changing core logic
+
+### 🧠 Intelligent Anomaly Detection
+- **Modified Z-Score** with Median Absolute Deviation (MAD)
+- **Adaptive thresholds** using rolling windows
+- **Multi-metric validation** (price + volume for stocks)
+- **Configurable sensitivity** per market type
+
+### 📊 Real-Time Dashboard
+- **Live candlestick charts** with moving averages
+- **Z-Score tracking** with threshold visualization
+- **Anomaly alert panel** showing recent detections
+- **System health metrics** (monitoring status, anomaly count)
+- **Dark theme** designed for extended monitoring sessions
+
+### 🚨 Alert System
+- **Email notifications** for confirmed anomalies
+- **Slack webhook integration** (optional)
+- **Anomaly logging** for historical analysis
+- **Configurable alert rules**
+
+## 🚀 Quick Start
+
+### Prerequisites
+- Python 3.8 or higher
+- Gmail account (for email alerts)
+
+### Installation
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/YOUR_USERNAME/stock-anomaly-detection.git
+cd stock-anomaly-detection
+
+# 2. Create virtual environment
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# 3. Install dependencies
+pip install -r requirements.txt
+
+# 4. Configure environment
+cp .env.example .env
+# Edit .env with your email credentials
