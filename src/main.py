@@ -1,81 +1,97 @@
 # main.py
-from data_ingestion import StockDataStreamer
+"""
+Crypto & Stock Anomaly Detection System
+Supports both Yahoo Finance (stocks) and CoinGecko (crypto).
+Change DATA_SOURCE in config.py to switch.
+"""
+from data_sources.yahoo_finance import YahooFinanceStreamer
+from data_sources.coingecko import CoinGeckoStreamer
 from anomaly_detector import AnomalyDetector
 from dashboard import AnomalyDashboard
 from alerting import AlertManager
+import config
 import time
 import threading
 from datetime import datetime
 
-def monitoring_worker(streamer, detector, alert_manager, dashboard, interval=120):
-    """
-    Background worker that continuously monitors stocks for anomalies.
-    """
-    print("🔍 Starting background monitoring...")
+
+def create_streamer():
+    """Create the appropriate data streamer based on config."""
+    if config.DATA_SOURCE == "yahoo":
+        cfg = config.YAHOO_CONFIG
+        return YahooFinanceStreamer(cfg["symbols"], interval=cfg["interval"]), cfg
+    elif config.DATA_SOURCE == "coingecko":
+        cfg = config.COINGECKO_CONFIG
+        return CoinGeckoStreamer(cfg["symbols"]), cfg
+    else:
+        raise ValueError(f"Unknown data source: {config.DATA_SOURCE}")
+
+
+def monitoring_worker(streamer, detector, alert_manager, dashboard, cfg):
+    """Background worker that monitors for anomalies."""
+    source_name = streamer.source_name
+    market_type = streamer.market_type
+    use_volume = cfg.get("use_volume_confirmation", False)
+    
+    print(f"🔍 Monitoring {market_type} via {source_name}...")
+    print(f"   Volume confirmation: {'ON' if use_volume else 'OFF'}")
     
     while True:
         try:
-            # Step 1: Get latest data
             latest_data = streamer.fetch_latest()
             
             if latest_data.empty:
-                print("⚠️  No data received. Retrying...")
-                time.sleep(interval)
+                time.sleep(config.CHECK_INTERVAL)
                 continue
             
-            print(f"\n📊 [{datetime.now().strftime('%H:%M:%S')}] Checking stocks...")
+            timestamp = datetime.now().strftime('%H:%M:%S')
+            print(f"\n📊 [{timestamp}] Checking {len(streamer.symbols)} assets...")
             
-            # Step 2: Check each stock
             for symbol in streamer.symbols:
                 if symbol not in latest_data.index:
                     continue
                 
                 current_price = latest_data.loc[symbol, 'close']
-                current_volume = latest_data.loc[symbol, 'volume']
                 
-                # Step 3: ONE LINE detects anomalies (price AND volume)
-                result = detector.multi_metric_detection(
-                    symbol, 
-                    current_price, 
-                    current_volume
-                )
+                if use_volume:
+                    # Multi-metric: price + volume
+                    current_volume = latest_data.loc[symbol, 'volume']
+                    result = detector.multi_metric_detection(symbol, current_price, current_volume)
+                    z_label = f"P:{result['price_zscore']:.1f} V:{result['volume_zscore']:.1f}"
+                else:
+                    # Price-only detection
+                    result = detector.detect_anomalies(symbol, current_price)
+                    result['is_anomaly'] = result['is_anomaly']
+                    result['direction'] = result.get('direction', None)
+                    z_label = f"Z:{result['z_score']:.1f}"
                 
-                # Step 4: If anomaly detected, handle it
                 if result['is_anomaly']:
-                    print(f"🚨 ANOMALY: {symbol} | "
-                          f"Price Z-Score: {result['price_zscore']} | "
-                          f"Volume Z-Score: {result['volume_zscore']} | "
-                          f"Direction: {result['price_direction']} | "
-                          f"Signal Strength: {result['signal_strength']}")
+                    direction = result.get('direction', result.get('price_direction', 'unknown'))
+                    print(f"🚨 ANOMALY: {symbol:5s} | ${current_price:>10,.2f} | {z_label} | {direction}")
                     
-                    # Prepare alert data
                     anomaly_data = {
                         'symbol': symbol,
                         'timestamp': datetime.now(),
-                        'z_score': result['price_zscore'],
-                        'direction': result['price_direction'],
+                        'z_score': result.get('z_score', result.get('price_zscore', 0)),
+                        'direction': direction,
                         'current_price': current_price,
-                        'signal_strength': result['signal_strength']
+                        'source': source_name,
+                        'market': market_type
                     }
                     
-                    # Log to dashboard
                     dashboard.anomaly_log.append(anomaly_data)
                     if len(dashboard.anomaly_log) > 100:
                         dashboard.anomaly_log = dashboard.anomaly_log[-100:]
                     
-                    # Send alerts
-                    try:
-                        alert_manager.send_email_alert(anomaly_data)
-                        alert_manager.send_slack_alert(anomaly_data)
-                    except Exception as e:
-                        print(f"⚠️ Alert failed: {e}")
+                    if config.ALERTS_ENABLED and config.EMAIL_ALERTS:
+                        try:
+                            alert_manager.send_email_alert(anomaly_data)
+                        except Exception as e:
+                            print(f"  ⚠️ Alert failed: {e}")
                 else:
-                    print(f"✅ Normal: {symbol} | "
-                          f"Price Z-Score: {result['price_zscore']:.2f} | "
-                          f"Volume Z-Score: {result['volume_zscore']:.2f}")
+                    print(f"✅ Normal: {symbol:5s} | ${current_price:>10,.2f} | {z_label}")
             
-            # Wait before next check
-            time.sleep(interval)
+            time.sleep(config.CHECK_INTERVAL)
             
         except Exception as e:
             print(f"❌ Error: {e}")
@@ -84,74 +100,56 @@ def monitoring_worker(streamer, detector, alert_manager, dashboard, interval=120
 
 def main():
     """Main entry point."""
-    print("=" * 60)
-    print("📈 STOCK MARKET ANOMALY DETECTION SYSTEM")
-    print("=" * 60)
+    # Get configuration
+    streamer, cfg = create_streamer()
     
-    # Configuration
-    #SYMBOLS = ['AAPL', 'GOOGL', 'MSFT', 'AMZN', 'TSLA']
-    # Change from stocks to crypto
-    SYMBOLS = ['BTC-USD', 'ETH-USD', 'SOL-USD', 'DOGE-USD', 'ADA-USD']
-    CHECK_INTERVAL = 120  # Check every 2 minutes
-    ZSCORE_THRESHOLD = 2.5
-    WINDOW_SIZE = 30
-    
-    print(f"\n🔧 Configuration:")
-    print(f"   Symbols: {', '.join(SYMBOLS)}")
-    print(f"   Check Interval: {CHECK_INTERVAL}s")
-    print(f"   Z-Score Threshold: {ZSCORE_THRESHOLD}")
-    print(f"   Rolling Window: {WINDOW_SIZE} periods")
+    print("=" * 60)
+    print(f"📈 ANOMALY DETECTION SYSTEM")
+    print(f"   Market: {streamer.market_type}")
+    print(f"   Source: {streamer.source_name}")
+    print("=" * 60)
+    print(f"\n🔧 Settings:")
+    print(f"   Assets: {', '.join(cfg['symbols'])}")
+    print(f"   Threshold: {cfg['anomaly_threshold']}")
+    print(f"   Window: {cfg['window_size']}")
+    print(f"   Check every: {config.CHECK_INTERVAL}s")
     
     # Initialize components
-    print("\n🚀 Initializing...")
-    
-    streamer = StockDataStreamer(SYMBOLS, interval="1m")
-    print("   ✅ Data streamer ready")
-    
-    detector = AnomalyDetector(window_size=WINDOW_SIZE, threshold=ZSCORE_THRESHOLD)
-    print("   ✅ Anomaly detector ready")
-    
+    print("\n🚀 Starting...")
+    detector = AnomalyDetector(
+        window_size=cfg["window_size"],
+        threshold=cfg["anomaly_threshold"]
+    )
     alert_manager = AlertManager()
-    print("   ✅ Alert manager ready")
-    
     dashboard = AnomalyDashboard(streamer, detector)
-    print("   ✅ Dashboard ready")
     
-    # Load historical data for baseline
+    # Load historical data
     print("\n📥 Loading historical data...")
     try:
-        historical_data = streamer.historical_data(period="5d")
-        for symbol, data in historical_data.items():
-            if not data.empty:
-                prices = data['Close'].tolist()[-WINDOW_SIZE:]
-                volumes = data['Volume'].tolist()[-WINDOW_SIZE:]
-                
-                # Fill price history
-                detector.history[symbol] = prices
-                
-                # Fill volume history (using symbol_vol as key)
-                detector.history[f"{symbol}_vol"] = volumes
-                
-                print(f"   ✅ {symbol}: {len(prices)} data points loaded")
+        historical = streamer.historical_data()
+        for symbol, data in historical.items():
+            if not data.empty and len(data) >= cfg["window_size"]:
+                detector.history[symbol] = data['Close'].tolist()[-cfg["window_size"]:]
+                print(f"   ✅ {symbol}: {cfg['window_size']} baseline points ready")
     except Exception as e:
-        print(f"   ⚠️  Could not load historical data: {e}")
+        print(f"   ⚠️  Historical data: {e}")
     
     # Start monitoring in background
-    monitor_thread = threading.Thread(
+    thread = threading.Thread(
         target=monitoring_worker,
-        args=(streamer, detector, alert_manager, dashboard, CHECK_INTERVAL),
+        args=(streamer, detector, alert_manager, dashboard, cfg),
         daemon=True
     )
-    monitor_thread.start()
+    thread.start()
     
     # Start dashboard
-    print("\n" + "=" * 60)
-    print("🎯 System Ready!")
-    print(f"📊 Open: http://localhost:8052")
-    print("=" * 60)
+    print(f"\n{'='*60}")
+    print(f"🎯 System Live!")
+    print(f"📊 Dashboard: http://localhost:{config.DASHBOARD_PORT}")
+    print(f"{'='*60}\n")
     
     try:
-        dashboard.run(debug=False, port=8052)
+        dashboard.run(debug=config.DASHBOARD_DEBUG, port=config.DASHBOARD_PORT)
     except KeyboardInterrupt:
         print("\n\n👋 Shutting down...")
 
