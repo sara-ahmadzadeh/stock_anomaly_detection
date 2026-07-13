@@ -35,7 +35,7 @@ COINGECKO_CONFIG = {
 # ============================================
 # MONITORING SETTINGS
 # ============================================
-CHECK_INTERVAL = 120  # Seconds between checks (2 minutes)
+CHECK_INTERVAL = 180  # Seconds between checks (2 minutes)
 
 # ============================================
 # ALERT SETTINGS
