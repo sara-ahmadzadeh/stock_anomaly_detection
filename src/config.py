@@ -47,5 +47,5 @@ SLACK_ALERTS = False  # Set to True if you have a Slack webhook
 # ============================================
 # DASHBOARD SETTINGS
 # ============================================
-DASHBOARD_PORT = 8050
+DASHBOARD_PORT = 8051
 DASHBOARD_DEBUG = False  # Set True to see detailed errors

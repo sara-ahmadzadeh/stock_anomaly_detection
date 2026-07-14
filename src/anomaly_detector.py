@@ -1,4 +1,4 @@
-# anomaly_detector.py
+# src/anomaly_detector.py
 import numpy as np
 import pandas as pd
 
@@ -6,64 +6,45 @@ class AnomalyDetector:
     def __init__(self, window_size=20, threshold=3.5):
         self.window_size = window_size
         self.threshold = threshold
-        self.history = {}  # Store recent data for each symbol
+        self.history = {}
+        self.zscore_history = {}
     
     def modified_zscore(self, data):
-        """
-        Calculate Modified Z-Score.
-        
-        Formula: 0.6745 * (x - median) / MAD
-        
-        Why 0.6745? It makes MAD comparable to standard deviation
-        for normally distributed data.
-        """
         median = np.median(data)
         mad = np.median(np.abs(data - median))
-        
         if mad == 0:
             return np.zeros_like(data)
-        
         return 0.6745 * (data - median) / mad
     
     def detect_anomalies(self, key, current_value):
-        """
-        Check if a single value is anomalous.
-        
-        Args:
-            key: String to identify what we're tracking (e.g., 'AAPL' or 'AAPL_vol')
-            current_value: The latest value to check
-        
-        Returns:
-            dict with is_anomaly, z_score, and direction
-        """
-        # Initialize history for this key if needed
+        # Initialize if new key
         if key not in self.history:
             self.history[key] = []
+        if key not in self.zscore_history:
+            self.zscore_history[key] = []
         
-        # Add current value to history
+        # Add value
         self.history[key].append(current_value)
-        
-        # Keep only window_size values
         if len(self.history[key]) > self.window_size:
             self.history[key] = self.history[key][-self.window_size:]
         
-        # Need enough data to detect anomalies
+        # Not enough data yet
         if len(self.history[key]) < self.window_size:
-            return {
-                'is_anomaly': False,
-                'z_score': 0,
-                'direction': None,
-                'message': f'Collecting data: {len(self.history[key])}/{self.window_size}'
-            }
+            self.zscore_history[key].append(0)
+            return {'is_anomaly': False, 'z_score': 0, 'direction': None}
         
-        # Calculate z-scores for all values including current
+        # Calculate z-score
         all_values = np.array(self.history[key])
         z_scores = self.modified_zscore(all_values)
-        current_zscore = z_scores[-1]  # Z-score of the latest value
+        current_zscore = z_scores[-1]
         
-        # Determine if anomaly
+        # Store for dashboard
+        self.zscore_history[key].append(current_zscore)
+        if len(self.zscore_history[key]) > 100:
+            self.zscore_history[key] = self.zscore_history[key][-100:]
+        
         is_anomaly = abs(current_zscore) > self.threshold
-        direction = 'up' if current_zscore > 0 else 'down' if current_zscore < 0 else None
+        direction = 'up' if current_zscore > 0 else 'down'
         
         return {
             'is_anomaly': is_anomaly,
@@ -72,30 +53,10 @@ class AnomalyDetector:
         }
     
     def multi_metric_detection(self, symbol, price, volume):
-        """
-        Detect anomalies using BOTH price AND volume.
-        
-        An anomaly is only confirmed when BOTH metrics are unusual.
-        This dramatically reduces false positives.
-        
-        Args:
-            symbol: Stock ticker (e.g., 'AAPL')
-            price: Current price
-            volume: Current volume
-        
-        Returns:
-            dict with combined results
-        """
-        # Check price
         price_result = self.detect_anomalies(symbol, price)
-        
-        # Check volume (stored under symbol_vol to keep separate)
         volume_result = self.detect_anomalies(f"{symbol}_vol", volume)
         
-        # BOTH must be anomalous
         is_confirmed = price_result['is_anomaly'] and volume_result['is_anomaly']
-        
-        # Combined signal strength
         signal_strength = abs(price_result['z_score']) + abs(volume_result['z_score'])
         
         return {
@@ -105,6 +66,4 @@ class AnomalyDetector:
             'volume_zscore': volume_result['z_score'],
             'price_direction': price_result['direction'],
             'signal_strength': round(signal_strength, 2),
-            'price_anomaly': price_result['is_anomaly'],
-            'volume_anomaly': volume_result['is_anomaly']
         }

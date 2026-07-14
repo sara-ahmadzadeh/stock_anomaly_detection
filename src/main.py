@@ -94,7 +94,9 @@ def monitoring_worker(streamer, detector, alert_manager, dashboard, cfg):
             time.sleep(config.CHECK_INTERVAL)
             
         except Exception as e:
+            import traceback
             print(f"❌ Error: {e}")
+            print(traceback.format_exc())  # This shows the FULL error with line numbers
             time.sleep(30)
 
 
