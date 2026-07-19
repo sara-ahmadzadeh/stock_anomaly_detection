@@ -72,7 +72,7 @@ pip install -r requirements.txt
 # 4. Configure environment
 cp .env.example .env
 # Edit .env with your email credentials
-
+```
 
 ## 🎬 Live Demo
 
