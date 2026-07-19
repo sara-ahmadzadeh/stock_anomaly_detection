@@ -72,3 +72,25 @@ pip install -r requirements.txt
 # 4. Configure environment
 cp .env.example .env
 # Edit .env with your email credentials
+
+
+## 🎬 Live Demo
+
+<p align="center">
+  <img src="assets/dashboard_overview.png" alt="Dashboard" width="800"/>
+</p>
+
+### Anomaly Detection in Action
+
+<p align="center">
+  <img src="assets/terminal_output.png" alt="Terminal Output" width="600"/>
+</p>
+
+### Z-Score Tracking
+
+<p align="center">
+  <img src="assets/zscore_chart.png" alt="Z-Score Chart" width="600"/>
+</p>
+
+
+![Dashboard Demo](assets/dashboard_demo.gif)
