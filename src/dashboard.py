@@ -276,10 +276,10 @@ class AnomalyDashboard:
             return self._create_empty_chart("Loading z-score chart...")
     
     def _create_alerts_display(self):
-        """Create alerts display."""
+        """Create enhanced alerts display."""
         if not self.anomaly_log:
-            return [html.P("No anomalies detected yet. Building baseline...",
-                          style={'color': '#7f8c8d', 'fontStyle': 'italic'})]
+            return [html.P("No anomalies yet. Building baseline...",
+                        style={'color': '#7f8c8d', 'fontStyle': 'italic'})]
         
         recent = self.anomaly_log[-5:][::-1]
         alerts = []
@@ -288,18 +288,38 @@ class AnomalyDashboard:
             time_str = anomaly['timestamp'].strftime('%H:%M:%S')
             direction = anomaly.get('direction', 'unknown')
             icon = "🔺" if direction == 'up' else "🔻"
+            confidence = anomaly.get('confidence', 0)
+            recommendation = anomaly.get('recommendation', '')
+            change_pct = anomaly.get('price_change_pct', 0)
+            
+            # Color code by confidence
+            if confidence >= 80:
+                border_color = '#e74c3c'  # Red = high confidence
+                bg_color = 'rgba(231, 76, 60, 0.15)'
+            elif confidence >= 50:
+                border_color = '#f39c12'  # Orange = medium
+                bg_color = 'rgba(243, 156, 18, 0.1)'
+            else:
+                border_color = '#3498db'  # Blue = low
+                bg_color = 'rgba(52, 152, 219, 0.1)'
             
             alerts.append(html.Div([
-                html.Span(f"{icon} "),
-                html.Strong(anomaly['symbol']),
-                html.Span(f" - Z-Score: {anomaly['z_score']} | "),
-                html.Span(f"${anomaly['current_price']:,.2f}"),
-                html.Span(f" at {time_str}",
-                         style={'color': '#95a5a6', 'fontSize': '0.85em', 'marginLeft': '10px'})
+                html.Div([
+                    html.Span(f"{icon} "),
+                    html.Strong(anomaly['symbol']),
+                    html.Span(f" | {change_pct:+.2f}%"),
+                    html.Span(f" | Z: {anomaly['z_score']}"),
+                    html.Span(f" | {confidence}% confidence",
+                            style={'color': '#f39c12' if confidence < 80 else '#e74c3c'}),
+                    html.Span(f" | {time_str}",
+                            style={'color': '#95a5a6', 'fontSize': '0.8em', 'marginLeft': '10px'})
+                ]),
+                html.Div(recommendation,
+                        style={'fontSize': '0.85em', 'color': '#bdc3c7', 'marginTop': '4px'})
             ], style={
-                'padding': '10px', 'marginBottom': '5px',
-                'backgroundColor': 'rgba(231, 76, 60, 0.1)',
-                'borderLeft': '4px solid #e74c3c',
+                'padding': '10px', 'marginBottom': '8px',
+                'backgroundColor': bg_color,
+                'borderLeft': f'4px solid {border_color}',
                 'borderRadius': '3px'
             }))
         

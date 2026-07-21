@@ -1,51 +1,33 @@
 # config.py
-"""
-Central configuration for the Anomaly Detection System.
-Change settings here to switch between stocks and crypto.
-"""
 
-# ============================================
-# DATA SOURCE CONFIGURATION
-# ============================================
+DATA_SOURCE = "coingecko"
 
-# Choose your data source: "yahoo" or "coingecko"
-DATA_SOURCE = "coingecko"  # Change to "yahoo" for stocks
-
-# ============================================
-# YAHOO FINANCE SETTINGS (Stocks)
-# ============================================
-YAHOO_CONFIG = {
-    "symbols": ["AAPL", "GOOGL", "MSFT", "AMZN", "TSLA"],
-    "interval": "1m",         # Data frequency: 1m, 5m, 15m, 1h
-    "anomaly_threshold": 4.0,  # Higher = fewer alerts (stocks need this)
-    "window_size": 30,         # Data points for baseline
-    "use_volume_confirmation": True,  # Stocks: volume confirms price moves
-}
-
-# ============================================
-# COINGECKO SETTINGS (Crypto)
-# ============================================
 COINGECKO_CONFIG = {
     "symbols": ["BTC", "ETH", "SOL", "DOGE", "ADA", "XRP"],
-    "anomaly_threshold": 3.0,  # Lower = more sensitive (crypto is volatile)
+    "anomaly_threshold": 3.0,
+    "adaptive_thresholds": {
+        "BTC": 2.5,
+        "ETH": 3.0,
+        "SOL": 3.5,
+        "DOGE": 4.5,
+        "ADA": 3.5,
+        "XRP": 3.0,
+    },
     "window_size": 30,
-    "use_volume_confirmation": False,  # Crypto: volume patterns are different
+    "use_volume_confirmation": False,
 }
 
-# ============================================
-# MONITORING SETTINGS
-# ============================================
-CHECK_INTERVAL = 180  # Seconds between checks (2 minutes)
+YAHOO_CONFIG = {
+    "symbols": ["AAPL", "GOOGL", "MSFT", "AMZN", "TSLA"],
+    "interval": "1m",
+    "anomaly_threshold": 4.0,
+    "window_size": 30,
+    "use_volume_confirmation": True,
+}
 
-# ============================================
-# ALERT SETTINGS
-# ============================================
+CHECK_INTERVAL = 120
 ALERTS_ENABLED = True
 EMAIL_ALERTS = True
-SLACK_ALERTS = False  # Set to True if you have a Slack webhook
-
-# ============================================
-# DASHBOARD SETTINGS
-# ============================================
+SLACK_ALERTS = False
 DASHBOARD_PORT = 8051
-DASHBOARD_DEBUG = False  # Set True to see detailed errors
+DASHBOARD_DEBUG = False

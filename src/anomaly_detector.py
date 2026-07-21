@@ -1,4 +1,3 @@
-# anomaly_detector.py
 import numpy as np
 import pandas as pd
 
@@ -9,7 +8,6 @@ class AnomalyDetector:
         self.adaptive_thresholds = adaptive_thresholds or {}
         self.history = {}
         self.zscore_history = {}
-        self.market_history = {}  # Track all coins to detect market-wide moves
     
     def modified_zscore(self, data):
         median = np.median(data)
@@ -19,13 +17,10 @@ class AnomalyDetector:
         return 0.6745 * (data - median) / mad
     
     def get_market_direction(self):
-        """
-        Check if the ENTIRE market is moving together.
-        If all coins are up, a single coin going up isn't an anomaly.
-        """
+        """Check if entire market is moving together."""
         directions = []
         for key in self.history:
-            if '_vol' in key:  # Skip volume keys
+            if '_vol' in key:
                 continue
             if len(self.history[key]) >= 2:
                 change = (self.history[key][-1] - self.history[key][-2]) / self.history[key][-2]
@@ -35,82 +30,94 @@ class AnomalyDetector:
             return "neutral"
         
         up_count = sum(1 for d in directions if d > 0)
-        down_count = sum(1 for d in directions if d < 0)
         total = len(directions)
         
         if up_count / total > 0.7:
-            return "bullish"  # Most coins going up
-        elif down_count / total > 0.7:
-            return "bearish"  # Most coins going down
+            return "bullish"
+        elif up_count / total < 0.3:
+            return "bearish"
         else:
-            return "mixed"    # Coins moving independently
+            return "mixed"
     
-    def calculate_confidence(self, symbol, z_score, market_direction, 
-                            price_direction, volume_change=None):
-        """
-        Calculate confidence score (0-100%) that this is a REAL anomaly.
+    def calculate_confidence(self, symbol, z_score, market_direction, price_direction):
+        """Calculate confidence score (0-100%)."""
+        confidence = 40  # Base
         
-        Factors:
-        - Z-Score magnitude (higher = more confident)
-        - Market divergence (coin moving opposite to market = more confident)
-        - Z-Score exceeds threshold by how much
-        """
-        confidence = 50  # Base confidence
-        
-        # Factor 1: Z-Score strength (up to +25)
+        # Z-Score strength
         z_abs = abs(z_score)
         threshold = self.adaptive_thresholds.get(symbol, self.threshold)
-        if z_abs > threshold * 1.5:
-            confidence += 25
-        elif z_abs > threshold * 1.2:
-            confidence += 15
+        if z_abs > threshold * 2.0:
+            confidence += 30
+        elif z_abs > threshold * 1.5:
+            confidence += 20
         elif z_abs > threshold:
-            confidence += 5
+            confidence += 10
         
-        # Factor 2: Market divergence (up to +25)
+        # Market divergence
         if market_direction == "bullish" and price_direction == "down":
-            confidence += 25  # Going down while market is up = very unusual
+            confidence += 25
         elif market_direction == "bearish" and price_direction == "up":
-            confidence += 25  # Going up while market is down = very unusual
+            confidence += 25
         elif market_direction == "mixed":
-            confidence += 15  # Mixed market = coin-specific move
-        else:
-            confidence += 0   # Moving with market = less confident
+            confidence += 10
         
-        # Factor 3: Volume confirmation (if available)
-        if volume_change is not None:
-            if volume_change > 2.0:  # Volume more than doubled
+        # Price change magnitude
+        if symbol in self.history and len(self.history[symbol]) >= 2:
+            change_pct = abs((self.history[symbol][-1] - self.history[symbol][-2]) / 
+                           self.history[symbol][-2] * 100)
+            if change_pct > 5:
                 confidence += 15
-            elif volume_change > 1.5:
-                confidence += 10
+            elif change_pct > 2:
+                confidence += 5
         
         return min(confidence, 100)
     
-    def detect_anomalies(self, key, current_value, volume=None):
-        """Enhanced anomaly detection with context."""
+    def get_recommendation(self, symbol, confidence, price_direction, market_direction, z_score):
+        """Generate specific action recommendation."""
+        if confidence < 50:
+            return "👀 Low confidence — monitor for confirmation before acting"
         
-        # =============================================
-        # INITIALIZE ALL DICTIONARIES FOR THIS KEY
-        # =============================================
+        threshold = self.adaptive_thresholds.get(symbol, self.threshold)
+        severity = "strong" if abs(z_score) > threshold * 1.5 else "moderate"
+        
+        if price_direction == 'up' and market_direction == 'bearish':
+            return f"🔍 {severity.title()} coin-specific breakout against bearish market — check news immediately for catalyst"
+        elif price_direction == 'down' and market_direction == 'bullish':
+            return f"⚠️ {severity.title()} dump against bullish market — possible coin-specific negative news"
+        elif price_direction == 'up' and market_direction == 'bullish':
+            return f"📈 Part of market-wide rally — consider taking partial profits if overexposed"
+        elif price_direction == 'down' and market_direction == 'bearish':
+            return f"📉 Part of market selloff — check if support levels are holding"
+        elif market_direction == 'mixed':
+            if price_direction == 'up':
+                return f"🟢 {severity.title()} coin-specific move up in mixed market — potential entry signal"
+            else:
+                return f"🔴 {severity.title()} coin-specific move down in mixed market — check for stop-loss triggers"
+        
+        return "📊 Anomaly detected — review charts and news before decision"
+    
+    def detect_anomalies(self, key, current_value, volume=None):
+        """Enhanced anomaly detection with context, confidence, and recommendations."""
+        
+        # Initialize all dictionaries
         if key not in self.history:
             self.history[key] = []
         if key not in self.zscore_history:
             self.zscore_history[key] = []
         
-        # Store current value
-        prev_value = self.history[key][-1] if self.history[key] else current_value
+        # Store value
         self.history[key].append(current_value)
         if len(self.history[key]) > self.window_size:
             self.history[key] = self.history[key][-self.window_size:]
         
-        # Not enough data yet
+        # Not enough data
         if len(self.history[key]) < self.window_size:
             self.zscore_history[key].append(0)
             return {
                 'is_anomaly': False, 'z_score': 0, 'direction': None,
                 'confidence': 0, 'market_context': 'insufficient_data',
-                'recommendation': '',
-                'threshold_used': self.threshold
+                'recommendation': '', 'threshold_used': self.threshold,
+                'price_change_pct': 0
             }
         
         # Calculate z-score
@@ -123,44 +130,41 @@ class AnomalyDetector:
         if len(self.zscore_history[key]) > 100:
             self.zscore_history[key] = self.zscore_history[key][-100:]
         
-        # Get threshold for this symbol
+        # Get threshold
         symbol = key.split('_')[0]
         threshold = self.adaptive_thresholds.get(symbol, self.threshold)
         
-        # Determine direction
+        # Direction
         price_direction = 'up' if current_zscore > 0 else 'down'
         
-        # Get market context (skip for volume keys)
+        # Price change %
+        price_change_pct = 0
+        if len(self.history[key]) >= 2:
+            prev = self.history[key][-2]
+            if prev > 0:
+                price_change_pct = round((current_value - prev) / prev * 100, 2)
+        
+        # Market context
         market_direction = "unknown"
         if '_vol' not in key:
             market_direction = self.get_market_direction()
         
-        # Check if anomaly
+        # Anomaly check
         is_anomaly = abs(current_zscore) > threshold
         
-        # Calculate confidence
+        # Confidence
         confidence = 0
         if is_anomaly:
             confidence = self.calculate_confidence(
-                symbol, current_zscore, market_direction, 
-                price_direction, None
+                symbol, current_zscore, market_direction, price_direction
             )
         
-        # Generate recommendation
+        # Recommendation
         recommendation = ""
-        if is_anomaly and confidence >= 70:
-            if price_direction == 'up' and market_direction in ['bearish', 'mixed']:
-                recommendation = "Coin-specific breakout — check news"
-            elif price_direction == 'down' and market_direction in ['bullish', 'mixed']:
-                recommendation = "Coin-specific dump — investigate"
-            elif market_direction == 'bullish':
-                recommendation = "Part of market rally — confirm volume"
-            elif market_direction == 'bearish':
-                recommendation = "Part of market selloff — monitor"
-            else:
-                recommendation = "Anomaly detected — watch for confirmation"
-        elif is_anomaly and confidence < 70:
-            recommendation = "Low confidence — wait for confirmation"
+        if is_anomaly:
+            recommendation = self.get_recommendation(
+                symbol, confidence, price_direction, market_direction, current_zscore
+            )
         
         return {
             'is_anomaly': is_anomaly,
@@ -169,16 +173,16 @@ class AnomalyDetector:
             'confidence': confidence,
             'market_context': market_direction,
             'recommendation': recommendation,
-            'threshold_used': threshold
+            'threshold_used': threshold,
+            'price_change_pct': price_change_pct
         }
-        
+    
     def multi_metric_detection(self, symbol, price, volume):
-        """Detect anomalies using both price and volume."""
+        """Multi-metric detection (stocks only)."""
         price_result = self.detect_anomalies(symbol, price, volume)
         volume_result = self.detect_anomalies(f"{symbol}_vol", volume)
         
         is_confirmed = price_result['is_anomaly'] and volume_result['is_anomaly']
-        signal_strength = abs(price_result['z_score']) + abs(volume_result['z_score'])
         
         return {
             'symbol': symbol,
@@ -186,8 +190,9 @@ class AnomalyDetector:
             'price_zscore': price_result['z_score'],
             'volume_zscore': volume_result['z_score'],
             'price_direction': price_result['direction'],
-            'signal_strength': round(signal_strength, 2),
+            'signal_strength': round(abs(price_result['z_score']) + abs(volume_result['z_score']), 2),
             'confidence': price_result.get('confidence', 0),
             'market_context': price_result.get('market_context', 'unknown'),
             'recommendation': price_result.get('recommendation', ''),
+            'price_change_pct': price_result.get('price_change_pct', 0),
         }
