@@ -276,7 +276,7 @@ class AnomalyDashboard:
             return self._create_empty_chart("Loading z-score chart...")
     
     def _create_alerts_display(self):
-        """Create enhanced alerts display."""
+        """Create enhanced alerts display with indicators and actions."""
         if not self.anomaly_log:
             return [html.P("No anomalies yet. Building baseline...",
                         style={'color': '#7f8c8d', 'fontStyle': 'italic'})]
@@ -291,36 +291,82 @@ class AnomalyDashboard:
             confidence = anomaly.get('confidence', 0)
             recommendation = anomaly.get('recommendation', '')
             change_pct = anomaly.get('price_change_pct', 0)
+            rsi = anomaly.get('rsi')
+            macd = anomaly.get('macd')
+            indicator_action = anomaly.get('indicator_action', 'N/A')
+            indicator_conf = anomaly.get('indicator_confidence', 0)
             
             # Color code by confidence
             if confidence >= 80:
-                border_color = '#e74c3c'  # Red = high confidence
+                border_color = '#e74c3c'
                 bg_color = 'rgba(231, 76, 60, 0.15)'
+                confidence_color = '#e74c3c'
             elif confidence >= 50:
-                border_color = '#f39c12'  # Orange = medium
+                border_color = '#f39c12'
                 bg_color = 'rgba(243, 156, 18, 0.1)'
+                confidence_color = '#f39c12'
             else:
-                border_color = '#3498db'  # Blue = low
+                border_color = '#3498db'
                 bg_color = 'rgba(52, 152, 219, 0.1)'
+                confidence_color = '#3498db'
+            
+            # Indicator action color
+            if 'BUY' in indicator_action:
+                indicator_color = '#2ecc71'
+            elif 'SELL' in indicator_action:
+                indicator_color = '#e74c3c'
+            else:
+                indicator_color = '#95a5a6'
             
             alerts.append(html.Div([
+                # Row 1: Basic info
                 html.Div([
                     html.Span(f"{icon} "),
-                    html.Strong(anomaly['symbol']),
-                    html.Span(f" | {change_pct:+.2f}%"),
-                    html.Span(f" | Z: {anomaly['z_score']}"),
-                    html.Span(f" | {confidence}% confidence",
-                            style={'color': '#f39c12' if confidence < 80 else '#e74c3c'}),
-                    html.Span(f" | {time_str}",
-                            style={'color': '#95a5a6', 'fontSize': '0.8em', 'marginLeft': '10px'})
+                    html.Strong(anomaly['symbol'], style={'fontSize': '16px'}),
+                    html.Span(f" ${anomaly['current_price']:,.2f}",
+                            style={'marginLeft': '10px', 'fontWeight': 'bold'}),
+                    html.Span(f" {change_pct:+.2f}%",
+                            style={'color': '#2ecc71' if change_pct > 0 else '#e74c3c',
+                                    'marginLeft': '5px'}),
                 ]),
-                html.Div(recommendation,
-                        style={'fontSize': '0.85em', 'color': '#bdc3c7', 'marginTop': '4px'})
+                
+                # Row 2: Z-Score and Confidence
+                html.Div([
+                    html.Span(f"Z-Score: {anomaly['z_score']}", 
+                            style={'marginRight': '15px'}),
+                    html.Span(f"Confidence: ", style={'marginRight': '5px'}),
+                    html.Span(f"{confidence}%", style={'color': confidence_color, 'fontWeight': 'bold'}),
+                    html.Span(f" | {time_str}",
+                            style={'color': '#95a5a6', 'fontSize': '0.85em', 'marginLeft': '15px'}),
+                ], style={'marginTop': '4px'}),
+                
+                # Row 3: Technical Indicators
+                html.Div([
+                    html.Span("📊 Indicators: ", style={'color': '#bdc3c7'}),
+                    html.Span(f"RSI: {rsi}" if rsi else "RSI: --", 
+                            style={'marginRight': '15px'}),
+                    html.Span(f"MACD: {macd}" if macd else "MACD: --",
+                            style={'marginRight': '15px'}),
+                    html.Span(f"Signal: ", style={'marginRight': '5px'}),
+                    html.Span(f"{indicator_action} ({indicator_conf}%)",
+                            style={'color': indicator_color, 'fontWeight': 'bold'}),
+                ], style={'marginTop': '4px', 'fontSize': '0.9em'}),
+                
+                # Row 4: Recommendation
+                html.Div([
+                    html.Span("🎯 ", style={'fontSize': '14px'}),
+                    html.Span(recommendation,
+                            style={'color': '#ecf0f1', 'fontSize': '0.9em', 'fontStyle': 'italic'}),
+                ], style={'marginTop': '6px', 'padding': '6px', 
+                        'backgroundColor': 'rgba(255,255,255,0.05)',
+                        'borderRadius': '3px'}),
+                
             ], style={
-                'padding': '10px', 'marginBottom': '8px',
+                'padding': '12px', 'marginBottom': '10px',
                 'backgroundColor': bg_color,
-                'borderLeft': f'4px solid {border_color}',
-                'borderRadius': '3px'
+                'borderLeft': f'5px solid {border_color}',
+                'borderRadius': '5px',
+                'boxShadow': '0 2px 4px rgba(0,0,0,0.2)'
             }))
         
         return alerts

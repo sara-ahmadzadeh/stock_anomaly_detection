@@ -5,6 +5,7 @@ from anomaly_detector import AnomalyDetector
 from dashboard import AnomalyDashboard
 from alerting import AlertManager
 from news_fetcher import NewsFetcher
+from indicators import TechnicalIndicators
 import config
 import time
 import threading
@@ -23,9 +24,12 @@ def create_streamer():
 
 
 def monitoring_worker(streamer, detector, alert_manager, dashboard, cfg):
-    """Background worker with full context detection."""
+    """Background worker with full context detection and technical indicators."""
     news_fetcher = NewsFetcher()
+    indicators = TechnicalIndicators()
+    
     print(f"🔍 Monitoring {streamer.market_type} via {streamer.source_name}...")
+    print(f"   Features: Anomaly Detection | Confidence Scoring | Technical Indicators | News\n")
     
     while True:
         try:
@@ -46,9 +50,21 @@ def monitoring_worker(streamer, detector, alert_manager, dashboard, cfg):
                 
                 current_price = latest_data.loc[symbol, 'close']
                 
-                # Enhanced detection
+                # ==========================================
+                # STEP 1: Anomaly Detection
+                # ==========================================
                 result = detector.detect_anomalies(symbol, current_price)
                 
+                # ==========================================
+                # STEP 2: Technical Indicators (for ALL checks)
+                # ==========================================
+                indicator_result = None
+                if symbol in detector.history and len(detector.history[symbol]) >= 20:
+                    indicator_result = indicators.composite_signal(detector.history[symbol])
+                
+                # ==========================================
+                # STEP 3: Display Results
+                # ==========================================
                 if result['is_anomaly']:
                     confidence = result.get('confidence', 0)
                     context = result.get('market_context', 'unknown')
@@ -62,7 +78,17 @@ def monitoring_worker(streamer, detector, alert_manager, dashboard, cfg):
                     print(f"   Z-Score: {result['z_score']} | Direction: {result['direction']}")
                     print(f"   Confidence: [{bar}] {confidence}%")
                     print(f"   Market: {context}")
-                    print(f"   Action: {recommendation}")
+                    
+                    # Show technical indicators
+                    if indicator_result:
+                        print(f"   📊 RSI: {indicator_result['rsi']} | "
+                              f"MACD: {indicator_result['macd']} | "
+                              f"Signal: {indicator_result['action']} "
+                              f"({indicator_result['confidence']}%)")
+                        if indicator_result['reasons']:
+                            print(f"      Reasons: {' | '.join(indicator_result['reasons'][:3])}")
+                    
+                    print(f"   🎯 Action: {recommendation}")
                     
                     # Fetch related news for high confidence anomalies
                     if confidence >= 60:
@@ -72,6 +98,9 @@ def monitoring_worker(streamer, detector, alert_manager, dashboard, cfg):
                             for h in headlines:
                                 print(f"      • {h['title'][:80]}")
                     
+                    # ==========================================
+                    # Build anomaly data for dashboard
+                    # ==========================================
                     anomaly_data = {
                         'symbol': symbol,
                         'timestamp': datetime.now(),
@@ -82,6 +111,12 @@ def monitoring_worker(streamer, detector, alert_manager, dashboard, cfg):
                         'market_context': context,
                         'recommendation': recommendation,
                         'price_change_pct': change_pct,
+                        # Technical indicators for dashboard
+                        'rsi': indicator_result['rsi'] if indicator_result else None,
+                        'macd': indicator_result['macd'] if indicator_result else None,
+                        'indicator_action': indicator_result['action'] if indicator_result else 'N/A',
+                        'indicator_confidence': indicator_result['confidence'] if indicator_result else 0,
+                        'indicator_reasons': indicator_result['reasons'] if indicator_result else [],
                     }
                     
                     dashboard.anomaly_log.append(anomaly_data)
@@ -95,7 +130,10 @@ def monitoring_worker(streamer, detector, alert_manager, dashboard, cfg):
                         except:
                             pass
                 else:
-                    print(f"✅ {symbol:5s} | ${current_price:>12,.2f} | Z:{result['z_score']:>6.2f}")
+                    # Normal output
+                    rsi_str = f"RSI:{indicator_result['rsi']}" if indicator_result else ""
+                    print(f"✅ {symbol:5s} | ${current_price:>12,.2f} | "
+                          f"Z:{result['z_score']:>6.2f} | {rsi_str}")
             
             time.sleep(config.CHECK_INTERVAL)
             
@@ -112,7 +150,7 @@ def main():
     print("=" * 60)
     print(f"📈 ANOMALY DETECTION SYSTEM v2.0")
     print(f"   Market: {streamer.market_type} | Source: {streamer.source_name}")
-    print(f"   Features: Confidence Scoring | Market Context | Recommendations | News")
+    print(f"   Features: Z-Score | Confidence | RSI | MACD | Bollinger | News")
     print("=" * 60)
     
     detector = AnomalyDetector(
