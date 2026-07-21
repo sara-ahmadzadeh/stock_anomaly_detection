@@ -66,30 +66,41 @@ def monitoring_worker(streamer, detector, alert_manager, dashboard, cfg):
                     z_label = f"Z:{result['z_score']:.1f}"
                 
                 if result['is_anomaly']:
-                    direction = result.get('direction', result.get('price_direction', 'unknown'))
-                    print(f"🚨 ANOMALY: {symbol:5s} | ${current_price:>10,.2f} | {z_label} | {direction}")
+                    confidence = result.get('confidence', 0)
+                    context = result.get('market_context', 'unknown')
+                    recommendation = result.get('recommendation', '')
+                    
+                    # Simple confidence display
+                    bar = "#" * int(confidence / 10) + "-" * (10 - int(confidence / 10))
+                    
+                    print(f"🚨 ANOMALY: {symbol:5s} | ${current_price:>10,.2f} | Z:{result['z_score']:.1f} | {result['direction']}")
+                    if confidence > 0:
+                        print(f"   Confidence: [{bar}] {confidence}%")
+                        print(f"   Market: {context} | {recommendation}")
                     
                     anomaly_data = {
                         'symbol': symbol,
                         'timestamp': datetime.now(),
-                        'z_score': result.get('z_score', result.get('price_zscore', 0)),
-                        'direction': direction,
+                        'z_score': result['z_score'],
+                        'direction': result['direction'],
                         'current_price': current_price,
-                        'source': source_name,
-                        'market': market_type
+                        'confidence': confidence,
+                        'market_context': context,
+                        'recommendation': recommendation,
                     }
                     
                     dashboard.anomaly_log.append(anomaly_data)
                     if len(dashboard.anomaly_log) > 100:
                         dashboard.anomaly_log = dashboard.anomaly_log[-100:]
                     
-                    if config.ALERTS_ENABLED and config.EMAIL_ALERTS:
+                    # Send alerts only for high confidence anomalies
+                    if config.ALERTS_ENABLED and config.EMAIL_ALERTS and confidence >= 60:
                         try:
                             alert_manager.send_email_alert(anomaly_data)
-                        except Exception as e:
-                            print(f"  ⚠️ Alert failed: {e}")
+                        except:
+                            pass
                 else:
-                    print(f"✅ Normal: {symbol:5s} | ${current_price:>10,.2f} | {z_label}")
+                    print(f"✅ Normal: {symbol:5s} | ${current_price:>10,.2f} | Z:{result['z_score']:.2f}")
             
             time.sleep(config.CHECK_INTERVAL)
             
