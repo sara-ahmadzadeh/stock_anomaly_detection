@@ -276,7 +276,7 @@ class AnomalyDashboard:
             return self._create_empty_chart("Loading z-score chart...")
     
     def _create_alerts_display(self):
-        """Create enhanced alerts display with indicators and actions."""
+        """Create enhanced alerts display with indicators, actions, and clickable news."""
         if not self.anomaly_log:
             return [html.P("No anomalies yet. Building baseline...",
                         style={'color': '#7f8c8d', 'fontStyle': 'italic'})]
@@ -295,6 +295,7 @@ class AnomalyDashboard:
             macd = anomaly.get('macd')
             indicator_action = anomaly.get('indicator_action', 'N/A')
             indicator_conf = anomaly.get('indicator_confidence', 0)
+            news_headlines = anomaly.get('news_headlines', [])
             
             # Color code by confidence
             if confidence >= 80:
@@ -318,7 +319,8 @@ class AnomalyDashboard:
             else:
                 indicator_color = '#95a5a6'
             
-            alerts.append(html.Div([
+            # Build the alert card
+            card_children = [
                 # Row 1: Basic info
                 html.Div([
                     html.Span(f"{icon} "),
@@ -360,14 +362,61 @@ class AnomalyDashboard:
                 ], style={'marginTop': '6px', 'padding': '6px', 
                         'backgroundColor': 'rgba(255,255,255,0.05)',
                         'borderRadius': '3px'}),
+            ]
+            
+            # Row 5: Clickable News Headlines (if any)
+            if news_headlines:
+                news_items = []
+                for headline in news_headlines:
+                    title = headline.get('title', 'No title')
+                    url = headline.get('url', '#')
+                    
+                    # Truncate long titles
+                    display_title = title[:90] + "..." if len(title) > 90 else title
+                    
+                    news_items.append(
+                        html.A(
+                            html.Div([
+                                html.Span("📰 ", style={'fontSize': '12px'}),
+                                html.Span(display_title, style={'fontSize': '0.85em'}),
+                                html.Span(" ↗", style={'color': '#3498db', 'fontSize': '0.8em'}),
+                            ], style={
+                                'padding': '4px 8px',
+                                'marginTop': '4px',
+                                'backgroundColor': 'rgba(52, 152, 219, 0.1)',
+                                'borderRadius': '3px',
+                                'borderLeft': '3px solid #3498db',
+                            }),
+                            href=url,
+                            target='_blank',  # Open in new tab
+                            style={
+                                'textDecoration': 'none',
+                                'color': '#bdc3c7',
+                            }
+                        )
+                    )
                 
-            ], style={
-                'padding': '12px', 'marginBottom': '10px',
-                'backgroundColor': bg_color,
-                'borderLeft': f'5px solid {border_color}',
-                'borderRadius': '5px',
-                'boxShadow': '0 2px 4px rgba(0,0,0,0.2)'
-            }))
+                card_children.append(
+                    html.Div([
+                        html.Div("Related News:", style={
+                            'color': '#95a5a6', 'fontSize': '0.8em',
+                            'marginTop': '8px', 'marginBottom': '4px',
+                            'textTransform': 'uppercase', 'letterSpacing': '1px'
+                        }),
+                        *news_items
+                    ])
+                )
+            
+            alerts.append(html.Div(
+                card_children,
+                style={
+                    'padding': '12px', 'marginBottom': '10px',
+                    'backgroundColor': bg_color,
+                    'borderLeft': f'5px solid {border_color}',
+                    'borderRadius': '5px',
+                    'boxShadow': '0 2px 4px rgba(0,0,0,0.2)'
+                }
+            ))
         
         return alerts
     

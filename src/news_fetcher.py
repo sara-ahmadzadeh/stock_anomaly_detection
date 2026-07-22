@@ -13,14 +13,13 @@ class NewsFetcher:
     
     def __init__(self):
         self.base_url = "https://cryptopanic.com/api/v1/posts/"
-        # Free tier: no API key needed for basic access
         self.cache = {}
         self.cache_time = {}
     
     def get_news(self, symbol, limit=3):
         """
         Fetch recent news for a cryptocurrency.
-        Returns list of headlines.
+        Returns list of dicts with title, url, and sentiment.
         """
         # Check cache (valid for 10 minutes)
         now = datetime.now()
@@ -59,10 +58,19 @@ class NewsFetcher:
                 headlines = []
                 
                 for post in data.get('results', [])[:limit]:
+                    title = post.get('title', 'No title')
+                    url = post.get('url', '#')
+                    
+                    # If no direct URL, use the CryptoPanic link
+                    if not url or url == '#':
+                        slug = post.get('slug', '')
+                        if slug:
+                            url = f"https://cryptopanic.com/news/{slug}"
+                    
                     headlines.append({
-                        'title': post.get('title', 'No title'),
+                        'title': title,
                         'published': post.get('published_at', ''),
-                        'url': post.get('url', ''),
+                        'url': url,
                         'sentiment': post.get('votes', {}).get('positive', 0) - 
                                     post.get('votes', {}).get('negative', 0)
                     })
@@ -97,7 +105,15 @@ class NewsFetcher:
                 data = response.json()
                 headlines = []
                 for post in data.get('results', [])[:limit]:
-                    headlines.append(post.get('title', ''))
+                    title = post.get('title', '')
+                    url = post.get('url', '#')
+                    slug = post.get('slug', '')
+                    if not url and slug:
+                        url = f"https://cryptopanic.com/news/{slug}"
+                    headlines.append({
+                        'title': title,
+                        'url': url
+                    })
                 return headlines
             
             return []

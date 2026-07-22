@@ -91,8 +91,9 @@ def monitoring_worker(streamer, detector, alert_manager, dashboard, cfg):
                     print(f"   🎯 Action: {recommendation}")
                     
                     # Fetch related news for high confidence anomalies
+                    headlines = []
                     if confidence >= 60:
-                        headlines = news_fetcher.get_news(symbol, limit=2)
+                        headlines = news_fetcher.get_news(symbol, limit=3)
                         if headlines:
                             print(f"   📰 Recent News:")
                             for h in headlines:
@@ -117,6 +118,7 @@ def monitoring_worker(streamer, detector, alert_manager, dashboard, cfg):
                         'indicator_action': indicator_result['action'] if indicator_result else 'N/A',
                         'indicator_confidence': indicator_result['confidence'] if indicator_result else 0,
                         'indicator_reasons': indicator_result['reasons'] if indicator_result else [],
+                        'news_headlines': headlines,
                     }
                     
                     dashboard.anomaly_log.append(anomaly_data)
