@@ -78,8 +78,17 @@ class NewsFetcher:
                 self.cache[symbol] = headlines
                 self.cache_time[symbol] = now
                 return headlines
+            # If CryptoPanic fails, use a simple Google News search link
+            if not headlines:
+                search_term = search_terms.get(symbol, symbol.lower())
+                headlines = [{
+                    'title': f'Search "{search_term} news" on Google',
+                    'url': f'https://www.google.com/search?q={search_term}+crypto+news&tbm=nws',
+                    'published': '',
+                    'sentiment': 0
+                }]
             
-            return []
+            return headlines
             
         except Exception as e:
             logger.warning(f"News fetch failed for {symbol}: {e}")

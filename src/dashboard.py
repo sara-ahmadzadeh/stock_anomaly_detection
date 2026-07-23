@@ -281,7 +281,7 @@ class AnomalyDashboard:
             return [html.P("No anomalies yet. Building baseline...",
                         style={'color': '#7f8c8d', 'fontStyle': 'italic'})]
         
-        recent = self.anomaly_log[-5:][::-1]
+        recent = self.anomaly_log[-10:][::-1]
         alerts = []
         
         for anomaly in recent:

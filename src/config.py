@@ -6,12 +6,12 @@ COINGECKO_CONFIG = {
     "symbols": ["BTC", "ETH", "SOL", "DOGE", "ADA", "XRP"],
     "anomaly_threshold": 3.0,
     "adaptive_thresholds": {
-        "BTC": 2.5,
-        "ETH": 3.0,
-        "SOL": 3.5,
-        "DOGE": 4.5,
-        "ADA": 3.5,
-        "XRP": 3.0,
+        "BTC": 3.5,   # Was 2.5 → much more selective
+        "ETH": 4.0,   # Was 3.0
+        "SOL": 4.5,   # Was 3.5
+        "DOGE": 5.5,  # Was 4.5
+        "ADA": 4.5,   # Was 3.5
+        "XRP": 4.0,   # Was 3.0
     },
     "window_size": 30,
     "use_volume_confirmation": False,

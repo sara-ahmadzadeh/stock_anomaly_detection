@@ -95,9 +95,11 @@ def monitoring_worker(streamer, detector, alert_manager, dashboard, cfg):
                     if confidence >= 60:
                         headlines = news_fetcher.get_news(symbol, limit=3)
                         if headlines:
-                            print(f"   📰 Recent News:")
+                            print(f"   📰 Found {len(headlines)} news articles:")
                             for h in headlines:
                                 print(f"      • {h['title'][:80]}")
+                        else:
+                            print(f"   📰 No news found (this is normal if API is rate limited)")
                     
                     # ==========================================
                     # Build anomaly data for dashboard
