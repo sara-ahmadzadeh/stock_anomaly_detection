@@ -91,16 +91,36 @@ def monitoring_worker(streamer, detector, alert_manager, dashboard, cfg):
                     print(f"   🎯 Action: {recommendation}")
                     
                     # Fetch related news for high confidence anomalies
+                    # Replace the news fetching section with:
                     headlines = []
-                    if confidence >= 60:
-                        headlines = news_fetcher.get_news(symbol, limit=3)
-                        if headlines:
-                            print(f"   📰 Found {len(headlines)} news articles:")
-                            for h in headlines:
-                                print(f"      • {h['title'][:80]}")
-                        else:
-                            print(f"   📰 No news found (this is normal if API is rate limited)")
-                    
+                    if confidence >= 50:  # Lower threshold to get more news
+                        try:
+                            headlines = news_fetcher.get_news(symbol, limit=3)
+                            if headlines:
+                                print(f"   📰 Found {len(headlines)} news articles")
+                            else:
+                                print(f"   📰 No news found for {symbol}")
+                                # Add a fallback search link
+                                search_terms = {
+                                    'BTC': 'bitcoin', 'ETH': 'ethereum', 'SOL': 'solana',
+                                    'DOGE': 'dogecoin', 'ADA': 'cardano', 'XRP': 'ripple'
+                                }
+                                search = search_terms.get(symbol, symbol.lower())
+                                headlines = [{
+                                    'title': f'Search "{symbol} crypto news" on Google',
+                                    'url': f'https://www.google.com/search?q={search}+crypto+news&tbm=nws',
+                                    'published': '',
+                                    'sentiment': 0
+                                }]
+                        except Exception as e:
+                            print(f"   📰 News fetch error: {e}")
+                            headlines = [{
+                                'title': f'Search {symbol} news',
+                                'url': f'https://cryptopanic.com/news/{symbol.lower()}',
+                                'published': '',
+                                'sentiment': 0
+                            }]    
+                                            
                     # ==========================================
                     # Build anomaly data for dashboard
                     # ==========================================
