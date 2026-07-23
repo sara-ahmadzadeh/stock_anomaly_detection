@@ -502,9 +502,7 @@ class AnomalyDashboard:
         return " → ".join(steps) if steps else "Collecting data for analysis..."
 
     def _get_signal_reasoning(self, anomaly):
-        """
-        Generate human-readable reasoning chain for the signal.
-        """
+        """Generate human-readable reasoning chain for the signal."""
         direction = anomaly.get('direction', 'unknown')
         indicator_action = anomaly.get('indicator_action', 'N/A')
         change_pct = anomaly.get('price_change_pct', 0)
@@ -512,67 +510,72 @@ class AnomalyDashboard:
         z_score = anomaly.get('z_score', 0)
         market_context = anomaly.get('market_context', '')
         
-        reasoning_steps = []
+        steps = []
         
-        # Step 1: What happened to price?
-        if change_pct > 2:
-            reasoning_steps.append(f"Price surged {change_pct:+.1f}%")
-        elif change_pct > 0.5:
-            reasoning_steps.append(f"Price rose {change_pct:+.1f}%")
-        elif change_pct < -2:
-            reasoning_steps.append(f"Price dropped {change_pct:+.1f}%")
-        elif change_pct < -0.5:
-            reasoning_steps.append(f"Price fell {change_pct:+.1f}%")
+        # What happened to price?
+        if abs(change_pct) > 0.01:  # Only show if there's actual change
+            if change_pct > 2:
+                steps.append(f"Price surged {change_pct:+.1f}%")
+            elif change_pct > 0.5:
+                steps.append(f"Price rose {change_pct:+.1f}%")
+            elif change_pct < -2:
+                steps.append(f"Price dropped {change_pct:+.1f}%")
+            elif change_pct < -0.5:
+                steps.append(f"Price fell {change_pct:+.1f}%")
+            else:
+                steps.append(f"Price changed {change_pct:+.2f}%")
+        else:
+            steps.append("Price stable")
         
-        # Step 2: What does RSI say?
+        # What does RSI say?
         if rsi:
             if rsi > 70:
-                reasoning_steps.append(f"RSI={rsi:.0f} → Overbought (>70)")
+                steps.append(f"RSI={rsi:.0f} → Overbought (>70)")
             elif rsi > 60:
-                reasoning_steps.append(f"RSI={rsi:.0f} → Bullish zone")
+                steps.append(f"RSI={rsi:.0f} → Bullish zone")
             elif rsi < 30:
-                reasoning_steps.append(f"RSI={rsi:.0f} → Oversold (<30)")
+                steps.append(f"RSI={rsi:.0f} → Oversold (<30)")
             elif rsi < 40:
-                reasoning_steps.append(f"RSI={rsi:.0f} → Bearish zone")
+                steps.append(f"RSI={rsi:.0f} → Bearish zone")
             else:
-                reasoning_steps.append(f"RSI={rsi:.0f} → Neutral")
+                steps.append(f"RSI={rsi:.0f} → Neutral")
         
-        # Step 3: Z-Score significance
+        # How unusual?
         if abs(z_score) > 5:
-            reasoning_steps.append(f"Z-Score={z_score} → Extremely unusual")
+            steps.append(f"Z={z_score:.1f} → Extremely unusual")
         elif abs(z_score) > 4:
-            reasoning_steps.append(f"Z-Score={z_score} → Very unusual")
+            steps.append(f"Z={z_score:.1f} → Very unusual")
         elif abs(z_score) > 3:
-            reasoning_steps.append(f"Z-Score={z_score} → Moderately unusual")
+            steps.append(f"Z={z_score:.1f} → Unusual")
         
-        # Step 4: Market context
-        if market_context == 'bullish':
-            reasoning_steps.append("Market is bullish (most coins rising)")
-        elif market_context == 'bearish':
-            reasoning_steps.append("Market is bearish (most coins falling)")
-        elif market_context == 'mixed':
-            reasoning_steps.append("Market is mixed (coins moving independently)")
+        # Market context
+        if market_context == 'mixed':
+            steps.append("Market: mixed")
+        elif market_context in ['bullish', 'bearish']:
+            steps.append(f"Market: {market_context}")
         
-        # Step 5: Final conclusion
-        if 'BUY' in indicator_action:
-            if rsi and rsi < 30:
-                reasoning_steps.append("→ Oversold bounce likely → BUY signal")
-            elif market_context == 'bearish' and direction == 'down':
-                reasoning_steps.append("→ Extreme fear, potential reversal → BUY signal")
-            else:
-                reasoning_steps.append("→ Bullish momentum → BUY signal")
-        elif 'SELL' in indicator_action:
+        # Final conclusion — FIXED LOGIC
+        if 'SELL' in str(indicator_action):
             if rsi and rsi > 70:
-                reasoning_steps.append("→ Overbought, likely pullback → SELL signal")
-            elif market_context == 'bullish' and direction == 'up':
-                reasoning_steps.append("→ Rally may be overextended → SELL signal")
+                steps.append("→ Overbought, likely pullback → SELL")
+            elif direction == 'down':
+                steps.append("→ Bearish momentum, price dropping → SELL")
             else:
-                reasoning_steps.append("→ Bearish momentum → SELL signal")
+                steps.append("→ Bearish indicators → SELL")
+        elif 'BUY' in str(indicator_action):
+            if rsi and rsi < 30:
+                steps.append("→ Oversold, likely bounce → BUY")
+            elif direction == 'down' and rsi and rsi < 40:
+                steps.append("→ Price low, potential reversal → BUY")
+            elif direction == 'up':
+                steps.append("→ Bullish momentum, price rising → BUY")
+            else:
+                steps.append("→ Bullish indicators → BUY")
         else:
-            reasoning_steps.append("→ Mixed signals → HOLD")
+            steps.append("→ Mixed signals → HOLD")
         
-        return " → ".join(reasoning_steps) if reasoning_steps else "Insufficient data for reasoning"
-
+        return " → ".join(steps) if steps else "Collecting data for analysis..."
+    
     def _create_empty_chart(self, message="Waiting for data..."):
         """Create placeholder chart."""
         fig = go.Figure()
