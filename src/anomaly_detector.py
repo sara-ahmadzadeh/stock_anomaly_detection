@@ -104,7 +104,14 @@ class AnomalyDetector:
             self.history[key] = []
         if key not in self.zscore_history:
             self.zscore_history[key] = []
-        
+
+        # Price change %
+        price_change_pct = 0
+        if len(self.history[key]) >= 1:
+            prev = self.history[key][-1] # Last value before adding current
+            if prev > 0:
+                price_change_pct = round((current_value - prev) / prev * 100, 2)
+
         # Store value
         self.history[key].append(current_value)
         if len(self.history[key]) > self.window_size:
@@ -136,14 +143,7 @@ class AnomalyDetector:
         
         # Direction
         price_direction = 'up' if current_zscore > 0 else 'down'
-        
-        # Price change %
-        price_change_pct = 0
-        if len(self.history[key]) >= 2:
-            prev = self.history[key][-2]
-            if prev > 0:
-                price_change_pct = round((current_value - prev) / prev * 100, 2)
-        
+                
         # Market context
         market_direction = "unknown"
         if '_vol' not in key:

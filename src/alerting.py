@@ -3,6 +3,7 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import json
+from venv import logger
 import requests
 from datetime import datetime
 import os
