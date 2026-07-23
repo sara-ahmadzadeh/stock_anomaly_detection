@@ -128,7 +128,9 @@ def monitoring_worker(streamer, detector, alert_manager, dashboard, cfg):
                         dashboard.anomaly_log = dashboard.anomaly_log[-100:]
                     
                     # Alert only for high confidence
-                    if config.ALERTS_ENABLED and config.EMAIL_ALERTS and confidence >= 60:
+                    if (config.ALERTS_ENABLED and config.EMAIL_ALERTS and 
+                        confidence >= config.EMAIL_MIN_CONFIDENCE and 
+                        abs(result['z_score']) >= config.EMAIL_MIN_ZSCORE):
                         try:
                             alert_manager.send_email_alert(anomaly_data)
                         except:

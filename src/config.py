@@ -31,3 +31,7 @@ EMAIL_ALERTS = True
 SLACK_ALERTS = False
 DASHBOARD_PORT = 8051
 DASHBOARD_DEBUG = False
+
+#(only email if confidence >= 80 AND z-score is very high)
+EMAIL_MIN_CONFIDENCE = 80      # Only email if confidence >= 80%
+EMAIL_MIN_ZSCORE = 4.0         # Only email if |Z-Score| >= 4.0
