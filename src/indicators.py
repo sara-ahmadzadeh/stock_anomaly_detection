@@ -58,8 +58,11 @@ class TechnicalIndicators:
         Positive = Uptrend, Negative = Downtrend.
         Signal line crossover indicates momentum change.
         """
+        if len(prices) < 10:
+            return None, None, "INSUFFICIENT_DATA"
+        
         if len(prices) < self.macd_slow + self.macd_signal:
-            return None, None, "NEUTRAL"
+            return round(prices[-1] - prices[0], 4), None, "COLLECTING_DATA"
         
         prices = pd.Series(prices)
         
