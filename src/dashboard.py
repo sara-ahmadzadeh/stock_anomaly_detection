@@ -276,7 +276,7 @@ class AnomalyDashboard:
             return self._create_empty_chart("Loading z-score chart...")
     
     def _create_alerts_display(self):
-        """Create enhanced alerts display with indicators, actions, and clickable news."""
+        """Create enhanced alerts display with indicators, actions, news, and reasoning."""
         if not self.anomaly_log:
             return [html.P("No anomalies yet. Building baseline...",
                         style={'color': '#7f8c8d', 'fontStyle': 'italic'})]
@@ -296,6 +296,7 @@ class AnomalyDashboard:
             indicator_action = anomaly.get('indicator_action', 'N/A')
             indicator_conf = anomaly.get('indicator_confidence', 0)
             news_headlines = anomaly.get('news_headlines', [])
+            market_context = anomaly.get('market_context', '')
             
             # Color code by confidence
             if confidence >= 80:
@@ -338,8 +339,10 @@ class AnomalyDashboard:
                             style={'marginRight': '15px'}),
                     html.Span(f"Confidence: ", style={'marginRight': '5px'}),
                     html.Span(f"{confidence}%", style={'color': confidence_color, 'fontWeight': 'bold'}),
+                    html.Span(f" | Market: {market_context}",
+                            style={'color': '#95a5a6', 'fontSize': '0.85em', 'marginLeft': '10px'}),
                     html.Span(f" | {time_str}",
-                            style={'color': '#95a5a6', 'fontSize': '0.85em', 'marginLeft': '15px'}),
+                            style={'color': '#95a5a6', 'fontSize': '0.85em', 'marginLeft': '10px'}),
                 ], style={'marginTop': '4px'}),
                 
                 # Row 3: Technical Indicators
@@ -354,7 +357,21 @@ class AnomalyDashboard:
                             style={'color': indicator_color, 'fontWeight': 'bold'}),
                 ], style={'marginTop': '4px', 'fontSize': '0.9em'}),
                 
-                # Row 4: Recommendation
+                # Row 4: Reasoning Chain
+                html.Div([
+                    html.Span("🧠 ", style={'fontSize': '12px'}),
+                    html.Span(self._get_signal_reasoning(anomaly),
+                            style={'color': '#bdc3c7', 'fontSize': '0.8em',
+                                    'fontStyle': 'italic'})
+                ], style={
+                    'marginTop': '6px',
+                    'padding': '8px',
+                    'backgroundColor': 'rgba(255,255,255,0.03)',
+                    'borderRadius': '3px',
+                    'borderLeft': '3px solid #7f8c8d'
+                }),
+                
+                # Row 5: Recommendation
                 html.Div([
                     html.Span("🎯 ", style={'fontSize': '14px'}),
                     html.Span(recommendation,
@@ -364,14 +381,12 @@ class AnomalyDashboard:
                         'borderRadius': '3px'}),
             ]
             
-            # Row 5: Clickable News Headlines (if any)
+            # Row 6: Clickable News Headlines (if any)
             if news_headlines:
                 news_items = []
                 for headline in news_headlines:
                     title = headline.get('title', 'No title')
                     url = headline.get('url', '#')
-                    
-                    # Truncate long titles
                     display_title = title[:90] + "..." if len(title) > 90 else title
                     
                     news_items.append(
@@ -388,11 +403,8 @@ class AnomalyDashboard:
                                 'borderLeft': '3px solid #3498db',
                             }),
                             href=url,
-                            target='_blank',  # Open in new tab
-                            style={
-                                'textDecoration': 'none',
-                                'color': '#bdc3c7',
-                            }
+                            target='_blank',
+                            style={'textDecoration': 'none', 'color': '#bdc3c7'}
                         )
                     )
                 
@@ -419,7 +431,148 @@ class AnomalyDashboard:
             ))
         
         return alerts
-    
+
+    def _get_signal_reasoning(self, anomaly):
+        """
+        Generate human-readable reasoning chain for the signal.
+        Example: "Price surged +3.2% → RSI=72 → Overbought → SELL signal"
+        """
+        direction = anomaly.get('direction', 'unknown')
+        indicator_action = anomaly.get('indicator_action', 'N/A')
+        change_pct = anomaly.get('price_change_pct', 0)
+        rsi = anomaly.get('rsi')
+        z_score = anomaly.get('z_score', 0)
+        market_context = anomaly.get('market_context', '')
+        
+        steps = []
+        
+        # What happened to price?
+        if abs(change_pct) > 2:
+            word = "surged" if change_pct > 0 else "dropped"
+            steps.append(f"Price {word} {change_pct:+.1f}%")
+        elif abs(change_pct) > 0.5:
+            word = "rose" if change_pct > 0 else "fell"
+            steps.append(f"Price {word} {change_pct:+.1f}%")
+        
+        # What does RSI say?
+        if rsi:
+            if rsi > 70:
+                steps.append(f"RSI={rsi:.0f} → Overbought (>70)")
+            elif rsi > 60:
+                steps.append(f"RSI={rsi:.0f} → Bullish")
+            elif rsi < 30:
+                steps.append(f"RSI={rsi:.0f} → Oversold (<30)")
+            elif rsi < 40:
+                steps.append(f"RSI={rsi:.0f} → Bearish")
+            else:
+                steps.append(f"RSI={rsi:.0f} → Neutral")
+        
+        # How unusual?
+        if abs(z_score) > 5:
+            steps.append(f"Z={z_score} → Extremely unusual")
+        elif abs(z_score) > 4:
+            steps.append(f"Z={z_score} → Very unusual")
+        elif abs(z_score) > 3:
+            steps.append(f"Z={z_score} → Unusual")
+        
+        # Market context
+        if market_context == 'mixed':
+            steps.append("Market: mixed (coin-specific)")
+        elif market_context in ['bullish', 'bearish']:
+            steps.append(f"Market: {market_context}")
+        
+        # Final conclusion
+        if 'SELL' in indicator_action:
+            if rsi and rsi > 70:
+                steps.append("→ Overbought, likely pullback → SELL")
+            elif market_context == 'bearish':
+                steps.append("→ Bearish trend → SELL")
+            else:
+                steps.append("→ Bearish momentum → SELL")
+        elif 'BUY' in indicator_action:
+            if rsi and rsi < 30:
+                steps.append("→ Oversold, likely bounce → BUY")
+            elif market_context == 'bullish':
+                steps.append("→ Bullish trend → BUY")
+            else:
+                steps.append("→ Bullish momentum → BUY")
+        else:
+            steps.append("→ Mixed signals → HOLD")
+        
+        return " → ".join(steps) if steps else "Collecting data for analysis..."
+
+    def _get_signal_reasoning(self, anomaly):
+        """
+        Generate human-readable reasoning chain for the signal.
+        """
+        direction = anomaly.get('direction', 'unknown')
+        indicator_action = anomaly.get('indicator_action', 'N/A')
+        change_pct = anomaly.get('price_change_pct', 0)
+        rsi = anomaly.get('rsi')
+        z_score = anomaly.get('z_score', 0)
+        market_context = anomaly.get('market_context', '')
+        
+        reasoning_steps = []
+        
+        # Step 1: What happened to price?
+        if change_pct > 2:
+            reasoning_steps.append(f"Price surged {change_pct:+.1f}%")
+        elif change_pct > 0.5:
+            reasoning_steps.append(f"Price rose {change_pct:+.1f}%")
+        elif change_pct < -2:
+            reasoning_steps.append(f"Price dropped {change_pct:+.1f}%")
+        elif change_pct < -0.5:
+            reasoning_steps.append(f"Price fell {change_pct:+.1f}%")
+        
+        # Step 2: What does RSI say?
+        if rsi:
+            if rsi > 70:
+                reasoning_steps.append(f"RSI={rsi:.0f} → Overbought (>70)")
+            elif rsi > 60:
+                reasoning_steps.append(f"RSI={rsi:.0f} → Bullish zone")
+            elif rsi < 30:
+                reasoning_steps.append(f"RSI={rsi:.0f} → Oversold (<30)")
+            elif rsi < 40:
+                reasoning_steps.append(f"RSI={rsi:.0f} → Bearish zone")
+            else:
+                reasoning_steps.append(f"RSI={rsi:.0f} → Neutral")
+        
+        # Step 3: Z-Score significance
+        if abs(z_score) > 5:
+            reasoning_steps.append(f"Z-Score={z_score} → Extremely unusual")
+        elif abs(z_score) > 4:
+            reasoning_steps.append(f"Z-Score={z_score} → Very unusual")
+        elif abs(z_score) > 3:
+            reasoning_steps.append(f"Z-Score={z_score} → Moderately unusual")
+        
+        # Step 4: Market context
+        if market_context == 'bullish':
+            reasoning_steps.append("Market is bullish (most coins rising)")
+        elif market_context == 'bearish':
+            reasoning_steps.append("Market is bearish (most coins falling)")
+        elif market_context == 'mixed':
+            reasoning_steps.append("Market is mixed (coins moving independently)")
+        
+        # Step 5: Final conclusion
+        if 'BUY' in indicator_action:
+            if rsi and rsi < 30:
+                reasoning_steps.append("→ Oversold bounce likely → BUY signal")
+            elif market_context == 'bearish' and direction == 'down':
+                reasoning_steps.append("→ Extreme fear, potential reversal → BUY signal")
+            else:
+                reasoning_steps.append("→ Bullish momentum → BUY signal")
+        elif 'SELL' in indicator_action:
+            if rsi and rsi > 70:
+                reasoning_steps.append("→ Overbought, likely pullback → SELL signal")
+            elif market_context == 'bullish' and direction == 'up':
+                reasoning_steps.append("→ Rally may be overextended → SELL signal")
+            else:
+                reasoning_steps.append("→ Bearish momentum → SELL signal")
+        else:
+            reasoning_steps.append("→ Mixed signals → HOLD")
+        
+        return " → ".join(reasoning_steps) if reasoning_steps else "Insufficient data for reasoning"
+
     def _create_empty_chart(self, message="Waiting for data..."):
         """Create placeholder chart."""
         fig = go.Figure()
