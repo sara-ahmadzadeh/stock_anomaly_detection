@@ -6,6 +6,7 @@ from dashboard import AnomalyDashboard
 from alerting import AlertManager
 from news_fetcher import NewsFetcher
 from indicators import TechnicalIndicators
+from database import AnomalyDatabase
 import config
 import time
 import threading
@@ -23,13 +24,13 @@ def create_streamer():
         raise ValueError(f"Unknown data source: {config.DATA_SOURCE}")
 
 
-def monitoring_worker(streamer, detector, alert_manager, dashboard, cfg):
+def monitoring_worker(streamer, detector, alert_manager, dashboard, cfg, db):
     """Background worker with full context detection and technical indicators."""
     news_fetcher = NewsFetcher()
     indicators = TechnicalIndicators()
     
     print(f"🔍 Monitoring {streamer.market_type} via {streamer.source_name}...")
-    print(f"   Features: Anomaly Detection | Confidence Scoring | Technical Indicators | News\n")
+    print(f"   Features: Anomaly Detection | Confidence Scoring | Technical Indicators | News | Database\n")
     
     while True:
         try:
@@ -63,7 +64,12 @@ def monitoring_worker(streamer, detector, alert_manager, dashboard, cfg):
                     indicator_result = indicators.composite_signal(detector.history[symbol])
                 
                 # ==========================================
-                # STEP 3: Display Results
+                # STEP 3: Save price to database
+                # ==========================================
+                db.save_price(symbol, current_price)
+                
+                # ==========================================
+                # STEP 4: Display Results
                 # ==========================================
                 if result['is_anomaly']:
                     confidence = result.get('confidence', 0)
@@ -90,17 +96,15 @@ def monitoring_worker(streamer, detector, alert_manager, dashboard, cfg):
                     
                     print(f"   🎯 Action: {recommendation}")
                     
-                    # Fetch related news for high confidence anomalies
-                    # Replace the news fetching section with:
+                    # Fetch related news
                     headlines = []
-                    if confidence >= 50:  # Lower threshold to get more news
+                    if confidence >= 50:
                         try:
                             headlines = news_fetcher.get_news(symbol, limit=3)
                             if headlines:
                                 print(f"   📰 Found {len(headlines)} news articles")
                             else:
-                                print(f"   📰 No news found for {symbol}")
-                                # Add a fallback search link
+                                # Fallback search link
                                 search_terms = {
                                     'BTC': 'bitcoin', 'ETH': 'ethereum', 'SOL': 'solana',
                                     'DOGE': 'dogecoin', 'ADA': 'cardano', 'XRP': 'ripple'
@@ -114,15 +118,9 @@ def monitoring_worker(streamer, detector, alert_manager, dashboard, cfg):
                                 }]
                         except Exception as e:
                             print(f"   📰 News fetch error: {e}")
-                            headlines = [{
-                                'title': f'Search {symbol} news',
-                                'url': f'https://cryptopanic.com/news/{symbol.lower()}',
-                                'published': '',
-                                'sentiment': 0
-                            }]    
-                                            
+                    
                     # ==========================================
-                    # Build anomaly data for dashboard
+                    # Build anomaly data
                     # ==========================================
                     anomaly_data = {
                         'symbol': symbol,
@@ -134,7 +132,6 @@ def monitoring_worker(streamer, detector, alert_manager, dashboard, cfg):
                         'market_context': context,
                         'recommendation': recommendation,
                         'price_change_pct': change_pct,
-                        # Technical indicators for dashboard
                         'rsi': indicator_result['rsi'] if indicator_result else None,
                         'macd': indicator_result['macd'] if indicator_result else None,
                         'indicator_action': indicator_result['action'] if indicator_result else 'N/A',
@@ -143,20 +140,23 @@ def monitoring_worker(streamer, detector, alert_manager, dashboard, cfg):
                         'news_headlines': headlines,
                     }
                     
+                    # Save to dashboard
                     dashboard.anomaly_log.append(anomaly_data)
                     if len(dashboard.anomaly_log) > 100:
                         dashboard.anomaly_log = dashboard.anomaly_log[-100:]
                     
+                    # Save to database
+                    db.save_anomaly(anomaly_data)
+                    
                     # Alert only for high confidence
                     if (config.ALERTS_ENABLED and config.EMAIL_ALERTS and 
-                        confidence >= config.EMAIL_MIN_CONFIDENCE and 
-                        abs(result['z_score']) >= config.EMAIL_MIN_ZSCORE):
+                        confidence >= getattr(config, 'EMAIL_MIN_CONFIDENCE', 80) and 
+                        abs(result['z_score']) >= getattr(config, 'EMAIL_MIN_ZSCORE', 4.0)):
                         try:
                             alert_manager.send_email_alert(anomaly_data)
                         except:
                             pass
                 else:
-                    # Normal output
                     rsi_str = f"RSI:{indicator_result['rsi']}" if indicator_result else ""
                     print(f"✅ {symbol:5s} | ${current_price:>12,.2f} | "
                           f"Z:{result['z_score']:>6.2f} | {rsi_str}")
@@ -176,7 +176,7 @@ def main():
     print("=" * 60)
     print(f"📈 ANOMALY DETECTION SYSTEM v2.0")
     print(f"   Market: {streamer.market_type} | Source: {streamer.source_name}")
-    print(f"   Features: Z-Score | Confidence | RSI | MACD | Bollinger | News")
+    print(f"   Features: Z-Score | Confidence | RSI | MACD | News | Database")
     print("=" * 60)
     
     detector = AnomalyDetector(
@@ -186,6 +186,10 @@ def main():
     )
     
     alert_manager = AlertManager()
+    
+    # Initialize database
+    db = AnomalyDatabase()
+    db.connect()
     
     print("\n📥 Loading historical data...")
     try:
@@ -201,7 +205,7 @@ def main():
     
     thread = threading.Thread(
         target=monitoring_worker,
-        args=(streamer, detector, alert_manager, dashboard, cfg),
+        args=(streamer, detector, alert_manager, dashboard, cfg, db),
         daemon=True
     )
     thread.start()
@@ -213,6 +217,7 @@ def main():
         dashboard.run(debug=False, port=config.DASHBOARD_PORT)
     except KeyboardInterrupt:
         print("\n👋 Shutting down...")
+        db.close()
 
 
 if __name__ == "__main__":
