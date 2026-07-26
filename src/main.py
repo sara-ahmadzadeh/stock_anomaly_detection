@@ -67,6 +67,9 @@ def monitoring_worker(streamer, detector, alert_manager, dashboard, cfg, db):
                 # STEP 3: Save price to database
                 # ==========================================
                 db.save_price(symbol, current_price)
+                saved = db.save_anomaly(anomaly_data)
+                if not saved:
+                    print("   ⚠️ Failed to save to database!")
                 
                 # ==========================================
                 # STEP 4: Display Results

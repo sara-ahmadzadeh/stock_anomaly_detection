@@ -132,7 +132,8 @@ class AnomalyDatabase:
     def save_anomaly(self, anomaly_data):
         """Save anomaly with signal type for backtesting."""
         if not self.connected or not self.connection_pool:
-            return
+            print("   ⚠️ DB not connected")
+            return False
         
         conn = self.connection_pool.getconn()
         try:
@@ -173,10 +174,13 @@ class AnomalyDatabase:
             ))
             
             conn.commit()
+            return True
             
         except Exception as e:
             logger.error(f"Save error: {e}")
+            print(f"   ⚠️ DB save error: {e}")
             conn.rollback()
+            return False
         finally:
             self.connection_pool.putconn(conn)
     
