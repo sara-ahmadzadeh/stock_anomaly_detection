@@ -132,7 +132,6 @@ class AnomalyDatabase:
     def save_anomaly(self, anomaly_data):
         """Save anomaly with signal type for backtesting."""
         if not self.connected or not self.connection_pool:
-            print("   ⚠️ DB not connected")
             return False
         
         conn = self.connection_pool.getconn()
@@ -147,6 +146,23 @@ class AnomalyDatabase:
                 signal_type = 'SELL'
             else:
                 signal_type = 'HOLD'
+
+            # Clean values - replace None and numpy values with proper Python types
+            import numpy as np
+            
+            def clean(val):
+                """Convert numpy/pandas values to Python native types."""
+                if val is None:
+                    return None
+                if isinstance(val, (np.integer,)):
+                    return int(val)
+                if isinstance(val, (np.floating,)):
+                    if np.isnan(val) or np.isinf(val):
+                        return None
+                    return float(val)
+                if isinstance(val, np.ndarray):
+                    return None
+                return val
             
             cursor.execute("""
                 INSERT INTO anomalies 
@@ -178,7 +194,6 @@ class AnomalyDatabase:
             
         except Exception as e:
             logger.error(f"Save error: {e}")
-            print(f"   ⚠️ DB save error: {e}")
             conn.rollback()
             return False
         finally:
@@ -187,10 +202,16 @@ class AnomalyDatabase:
     def save_price(self, symbol, price, timestamp=None):
         """Save a price point to history."""
         if not self.connected or not self.connection_pool:
-            return
+            return False
         
         if timestamp is None:
             timestamp = datetime.now()
+        
+        import numpy as np
+        
+        # Clean numpy values
+        if isinstance(price, (np.floating,)):
+            price = float(price)
         
         conn = self.connection_pool.getconn()
         try:
@@ -198,10 +219,13 @@ class AnomalyDatabase:
             cursor.execute("""
                 INSERT INTO price_history (symbol, recorded_at, price)
                 VALUES (%s, %s, %s)
-            """, (symbol, timestamp, price))
+            """, (str(symbol), timestamp, float(price)))
             conn.commit()
+            return True
         except Exception as e:
+            logger.error(f"Price save error: {e}")
             conn.rollback()
+            return False
         finally:
             self.connection_pool.putconn(conn)
     
