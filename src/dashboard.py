@@ -6,6 +6,7 @@ from plotly.subplots import make_subplots
 import pandas as pd
 from datetime import datetime
 import time
+from datetime import datetime, timedelta
 
 class AnomalyDashboard:
     def __init__(self, streamer, detector):
@@ -110,30 +111,38 @@ class AnomalyDashboard:
                 ], str(len(self.anomaly_log)), datetime.now().strftime('%H:%M:%S')
     
     def _create_price_chart(self, symbol):
-        """Create professional price chart with volume."""
+        """Create professional price chart with real time labels."""
         try:
             if symbol not in self.detector.history or len(self.detector.history[symbol]) < 2:
                 count = len(self.detector.history.get(symbol, []))
                 return self._create_empty_chart(f"Collecting {symbol} data... ({count}/30 checks)")
             
             prices = self.detector.history[symbol]
-            
-            # Create time labels showing how long ago each point was
-            # Each check is ~2 minutes apart
             total_checks = len(prices)
+            
+            # Get the current time
+            now = datetime.now()
+            
+            # Create time labels: calculate actual time for each data point
+            # Each check is CHECK_INTERVAL seconds apart (5 minutes = 300 seconds)
+            import config
+            interval_seconds = getattr(config, 'CHECK_INTERVAL', 300)
+            
             time_labels = []
             for i in range(total_checks):
-                minutes_ago = (total_checks - 1 - i) * 2  # 2 minutes per check
-                if minutes_ago >= 120:
-                    time_labels.append(f"{minutes_ago // 60}h ago")
-                elif minutes_ago >= 60:
-                    time_labels.append(f"1h ago")
-                elif minutes_ago == 0:
-                    time_labels.append("Now")
-                else:
-                    time_labels.append(f"{minutes_ago}m ago")
+                checks_ago = total_checks - 1 - i
+                seconds_ago = checks_ago * interval_seconds
+                point_time = now - timedelta(seconds=seconds_ago)
+                time_labels.append(point_time.strftime('%H:%M'))
             
-            # Create synthetic OHLC from price history for candlestick effect
+            # Total time span
+            total_minutes = (total_checks - 1) * interval_seconds // 60
+            if total_minutes >= 120:
+                time_span = f"{total_minutes // 60}h {total_minutes % 60}m"
+            else:
+                time_span = f"{total_minutes}m"
+            
+            # Create synthetic OHLC from price history
             df = pd.DataFrame({'close': prices})
             df['open'] = df['close'].shift(1).fillna(df['close'])
             df['high'] = df[['open', 'close']].max(axis=1) * 1.001
@@ -144,7 +153,7 @@ class AnomalyDashboard:
                 shared_xaxes=True,
                 vertical_spacing=0.05,
                 row_heights=[0.7, 0.3],
-                subplot_titles=(f'{symbol} Price Action (Last ~{total_checks * 2} minutes)', 
+                subplot_titles=(f'{symbol} Price Action (Last {time_span})', 
                             'Volume / Activity')
             )
             
@@ -176,7 +185,7 @@ class AnomalyDashboard:
                     row=1, col=1
                 )
             
-            # Volume bars (using price changes as pseudo-volume)
+            # Volume bars
             volume_data = [abs(prices[i] - prices[i-1]) / prices[i-1] * 100 if i > 0 else 0 
                         for i in range(len(prices))]
             colors = ['#ef5350' if i > 0 and prices[i] < prices[i-1] else '#26a69a' 
@@ -193,7 +202,7 @@ class AnomalyDashboard:
                 row=2, col=1
             )
             
-            # Mark anomalies on chart
+            # Mark anomalies
             symbol_anomalies = [a for a in self.anomaly_log if a['symbol'] == symbol]
             if symbol_anomalies:
                 fig.add_annotation(
@@ -218,7 +227,7 @@ class AnomalyDashboard:
                 margin=dict(l=50, r=50, t=50, b=50)
             )
             
-            fig.update_xaxes(title_text="Time (each point = ~2 min)", row=2, col=1)
+            fig.update_xaxes(title_text=f"Time (intervals: {interval_seconds // 60} min)", row=2, col=1)
             fig.update_yaxes(title_text="Price ($)", row=1, col=1)
             fig.update_yaxes(title_text="Change %", row=2, col=1)
             
