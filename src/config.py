@@ -25,7 +25,7 @@ YAHOO_CONFIG = {
     "use_volume_confirmation": True,
 }
 
-CHECK_INTERVAL = 120
+CHECK_INTERVAL = 300 # 5 minutes
 ALERTS_ENABLED = True
 EMAIL_ALERTS = True
 SLACK_ALERTS = False

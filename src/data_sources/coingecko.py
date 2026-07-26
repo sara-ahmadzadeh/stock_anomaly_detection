@@ -34,7 +34,7 @@ class CoinGeckoStreamer:
         return self.COIN_MAP.get(symbol.upper(), symbol.lower())
     
     def fetch_latest(self):
-        """Fetch latest crypto prices."""
+        """Fetch latest crypto prices with retry logic."""
         coin_ids = [self._get_coin_id(s) for s in self.symbols]
         url = f"{self.base_url}/simple/price"
         params = {
@@ -44,37 +44,49 @@ class CoinGeckoStreamer:
             'include_24hr_change': 'true'
         }
         
-        try:
-            response = requests.get(url, params=params, timeout=15)
-            
-            if response.status_code == 429:
-                logger.warning("Rate limited. Waiting 60s...")
-                time.sleep(60)
-                response = requests.get(url, params=params, timeout=15)
-            
-            response.raise_for_status()
-            prices = response.json()
-            
-            data = {}
-            for symbol in self.symbols:
-                coin_id = self._get_coin_id(symbol)
-                if coin_id in prices:
-                    coin_data = prices[coin_id]
-                    data[symbol] = {
-                        'timestamp': datetime.now(),
-                        'close': coin_data[self.vs_currency],
-                        'volume': coin_data.get(f'{self.vs_currency}_24h_vol', 0),
-                        'high': coin_data[self.vs_currency],
-                        'low': coin_data[self.vs_currency],
-                        'open': coin_data[self.vs_currency]
-                    }
-                    logger.info(f"✅ {symbol}: ${data[symbol]['close']:,.2f}")
-            
-            return pd.DataFrame(data).T if data else pd.DataFrame()
-            
-        except Exception as e:
-            logger.error(f"❌ CoinGecko error: {e}")
-            return pd.DataFrame()
+        for attempt in range(3):
+            try:
+                response = requests.get(url, params=params, timeout=30)
+                
+                if response.status_code == 429:
+                    wait = (attempt + 1) * 30
+                    logger.warning(f"Rate limited. Waiting {wait}s...")
+                    time.sleep(wait)
+                    continue
+                
+                if response.status_code != 200:
+                    logger.warning(f"HTTP {response.status_code}. Retrying...")
+                    time.sleep(10)
+                    continue
+                
+                prices = response.json()
+                
+                data = {}
+                for symbol in self.symbols:
+                    coin_id = self._get_coin_id(symbol)
+                    if coin_id in prices:
+                        coin_data = prices[coin_id]
+                        data[symbol] = {
+                            'timestamp': datetime.now(),
+                            'close': coin_data[self.vs_currency],
+                            'volume': coin_data.get(f'{self.vs_currency}_24h_vol', 0),
+                            'high': coin_data[self.vs_currency],
+                            'low': coin_data[self.vs_currency],
+                            'open': coin_data[self.vs_currency]
+                        }
+                        logger.info(f"✅ {symbol}: ${data[symbol]['close']:,.2f}")
+                
+                return pd.DataFrame(data).T if data else pd.DataFrame()
+                
+            except requests.exceptions.Timeout:
+                logger.warning(f"Timeout (attempt {attempt + 1}/3). Retrying...")
+                time.sleep(10)
+            except Exception as e:
+                logger.error(f"Error (attempt {attempt + 1}/3): {e}")
+                time.sleep(10)
+        
+        logger.error("❌ All fetch attempts failed")
+        return pd.DataFrame()
     
     def historical_data(self, days=7):
         """Fetch historical crypto data."""
