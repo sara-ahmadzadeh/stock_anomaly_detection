@@ -57,19 +57,16 @@ def monitoring_worker(streamer, detector, alert_manager, dashboard, cfg, db):
                 result = detector.detect_anomalies(symbol, current_price)
                 
                 # ==========================================
-                # STEP 2: Technical Indicators (for ALL checks)
+                # STEP 2: Technical Indicators
                 # ==========================================
                 indicator_result = None
                 if symbol in detector.history and len(detector.history[symbol]) >= 20:
                     indicator_result = indicators.composite_signal(detector.history[symbol])
                 
                 # ==========================================
-                # STEP 3: Save price to database
+                # STEP 3: Save price to database (EVERY check)
                 # ==========================================
                 db.save_price(symbol, current_price)
-                saved = db.save_anomaly(anomaly_data)
-                if not saved:
-                    print("   ⚠️ Failed to save to database!")
                 
                 # ==========================================
                 # STEP 4: Display Results
@@ -80,7 +77,6 @@ def monitoring_worker(streamer, detector, alert_manager, dashboard, cfg, db):
                     recommendation = result.get('recommendation', '')
                     change_pct = result.get('price_change_pct', 0)
                     
-                    # Confidence bar
                     bar = "█" * (confidence // 10) + "░" * (10 - confidence // 10)
                     
                     print(f"\n🚨 ANOMALY: {symbol} | ${current_price:,.2f} | {change_pct:+.2f}%")
@@ -88,7 +84,6 @@ def monitoring_worker(streamer, detector, alert_manager, dashboard, cfg, db):
                     print(f"   Confidence: [{bar}] {confidence}%")
                     print(f"   Market: {context}")
                     
-                    # Show technical indicators
                     if indicator_result:
                         print(f"   📊 RSI: {indicator_result['rsi']} | "
                               f"MACD: {indicator_result['macd']} | "
@@ -107,24 +102,21 @@ def monitoring_worker(streamer, detector, alert_manager, dashboard, cfg, db):
                             if headlines:
                                 print(f"   📰 Found {len(headlines)} news articles")
                             else:
-                                # Fallback search link
                                 search_terms = {
                                     'BTC': 'bitcoin', 'ETH': 'ethereum', 'SOL': 'solana',
                                     'DOGE': 'dogecoin', 'ADA': 'cardano', 'XRP': 'ripple'
                                 }
                                 search = search_terms.get(symbol, symbol.lower())
                                 headlines = [{
-                                    'title': f'Search "{symbol} crypto news" on Google',
-                                    'url': f'https://www.google.com/search?q={search}+crypto+news&tbm=nws',
+                                    'title': f'Search "{symbol} crypto news" on Google News',
+                                    'url': f'https://news.google.com/search?q={search}+crypto&hl=en',
                                     'published': '',
                                     'sentiment': 0
                                 }]
                         except Exception as e:
                             print(f"   📰 News fetch error: {e}")
                     
-                    # ==========================================
                     # Build anomaly data
-                    # ==========================================
                     anomaly_data = {
                         'symbol': symbol,
                         'timestamp': datetime.now(),
@@ -171,7 +163,6 @@ def monitoring_worker(streamer, detector, alert_manager, dashboard, cfg, db):
             print(f"❌ Error: {e}")
             print(traceback.format_exc())
             time.sleep(60)
-
 
 def main():
     streamer, cfg = create_streamer()
