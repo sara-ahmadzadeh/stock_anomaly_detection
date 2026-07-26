@@ -78,15 +78,38 @@ class NewsFetcher:
                 self.cache[symbol] = headlines
                 self.cache_time[symbol] = now
                 return headlines
-            # If CryptoPanic fails, use a simple Google News search link
+            # If CryptoPanic fails, try alternative sources
             if not headlines:
-                search_term = search_terms.get(symbol, symbol.lower())
-                headlines = [{
-                    'title': f'Search "{search_term} news" on Google',
-                    'url': f'https://www.google.com/search?q={search_term}+crypto+news&tbm=nws',
-                    'published': '',
-                    'sentiment': 0
-                }]
+                search_terms = {
+                    'BTC': 'bitcoin', 'ETH': 'ethereum', 'SOL': 'solana',
+                    'DOGE': 'dogecoin', 'ADA': 'cardano', 'XRP': 'ripple'
+                }
+                search = search_terms.get(symbol, symbol.lower())
+                
+                # Try Binance news (public API)
+                try:
+                    binance_url = f"https://www.binance.com/bapi/composite/v1/public/cms/article/list/query?type=1&pageSize={limit}&pageNo=1"
+                    response = requests.get(binance_url, timeout=5)
+                    if response.status_code == 200:
+                        articles = response.json().get('data', {}).get('articles', [])
+                        for article in articles[:limit]:
+                            headlines.append({
+                                'title': article.get('title', 'No title'),
+                                'url': f"https://www.binance.com/en/news/article/{article.get('code', '')}",
+                                'published': article.get('releaseDate', ''),
+                                'sentiment': 0
+                            })
+                except:
+                    pass
+                
+                # If still nothing, use Google News search (not just Google)
+                if not headlines:
+                    headlines = [{
+                        'title': f'Latest {symbol} news on Google News',
+                        'url': f'https://news.google.com/search?q={search}+crypto&hl=en',
+                        'published': '',
+                        'sentiment': 0
+                    }]
             
             return headlines
             

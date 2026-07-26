@@ -118,10 +118,25 @@ class AnomalyDashboard:
             
             prices = self.detector.history[symbol]
             
+            # Create time labels showing how long ago each point was
+            # Each check is ~2 minutes apart
+            total_checks = len(prices)
+            time_labels = []
+            for i in range(total_checks):
+                minutes_ago = (total_checks - 1 - i) * 2  # 2 minutes per check
+                if minutes_ago >= 120:
+                    time_labels.append(f"{minutes_ago // 60}h ago")
+                elif minutes_ago >= 60:
+                    time_labels.append(f"1h ago")
+                elif minutes_ago == 0:
+                    time_labels.append("Now")
+                else:
+                    time_labels.append(f"{minutes_ago}m ago")
+            
             # Create synthetic OHLC from price history for candlestick effect
             df = pd.DataFrame({'close': prices})
             df['open'] = df['close'].shift(1).fillna(df['close'])
-            df['high'] = df[['open', 'close']].max(axis=1) * 1.001  # Slight variation
+            df['high'] = df[['open', 'close']].max(axis=1) * 1.001
             df['low'] = df[['open', 'close']].min(axis=1) * 0.999
             
             fig = make_subplots(
@@ -129,13 +144,14 @@ class AnomalyDashboard:
                 shared_xaxes=True,
                 vertical_spacing=0.05,
                 row_heights=[0.7, 0.3],
-                subplot_titles=(f'{symbol} Price Action', 'Volume / Activity')
+                subplot_titles=(f'{symbol} Price Action (Last ~{total_checks * 2} minutes)', 
+                            'Volume / Activity')
             )
             
             # Candlestick chart
             fig.add_trace(
                 go.Candlestick(
-                    x=list(range(len(df))),
+                    x=time_labels,
                     open=df['open'],
                     high=df['high'],
                     low=df['low'],
@@ -152,7 +168,7 @@ class AnomalyDashboard:
                 ma = pd.Series(prices).rolling(window=5).mean()
                 fig.add_trace(
                     go.Scatter(
-                        x=list(range(len(ma))),
+                        x=time_labels,
                         y=ma,
                         name='5-period MA',
                         line=dict(color='#ffa726', width=1.5)
@@ -162,13 +178,13 @@ class AnomalyDashboard:
             
             # Volume bars (using price changes as pseudo-volume)
             volume_data = [abs(prices[i] - prices[i-1]) / prices[i-1] * 100 if i > 0 else 0 
-                          for i in range(len(prices))]
+                        for i in range(len(prices))]
             colors = ['#ef5350' if i > 0 and prices[i] < prices[i-1] else '#26a69a' 
-                     for i in range(len(prices))]
+                    for i in range(len(prices))]
             
             fig.add_trace(
                 go.Bar(
-                    x=list(range(len(volume_data))),
+                    x=time_labels,
                     y=volume_data,
                     name='Price Change %',
                     marker_color=colors,
@@ -180,16 +196,14 @@ class AnomalyDashboard:
             # Mark anomalies on chart
             symbol_anomalies = [a for a in self.anomaly_log if a['symbol'] == symbol]
             if symbol_anomalies:
-                for a in symbol_anomalies[-5:]:  # Last 5 anomalies
-                    # Find approximate position (this won't be exact but gives visual cue)
-                    fig.add_annotation(
-                        x=len(prices)-1, y=prices[-1],
-                        text="⚠️",
-                        showarrow=False,
-                        font=dict(size=20, color='#e74c3c'),
-                        bgcolor='rgba(0,0,0,0.5)'
-                    )
-                    break  # Just show one marker
+                fig.add_annotation(
+                    x=time_labels[-1], y=prices[-1],
+                    text="⚠️ Anomaly",
+                    showarrow=True,
+                    arrowhead=2,
+                    bgcolor='rgba(231, 76, 60, 0.8)',
+                    font=dict(color='white', size=11)
+                )
             
             fig.update_layout(
                 template='plotly_dark',
@@ -204,7 +218,7 @@ class AnomalyDashboard:
                 margin=dict(l=50, r=50, t=50, b=50)
             )
             
-            fig.update_xaxes(title_text="Check Number", row=2, col=1)
+            fig.update_xaxes(title_text="Time (each point = ~2 min)", row=2, col=1)
             fig.update_yaxes(title_text="Price ($)", row=1, col=1)
             fig.update_yaxes(title_text="Change %", row=2, col=1)
             
