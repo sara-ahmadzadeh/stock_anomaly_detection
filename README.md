@@ -12,6 +12,26 @@ A production-grade market monitoring system that combines statistical anomaly de
 
 ---
 
+## 📊 Current Features (v2.0)
+
+| Feature | Status |
+|---------|--------|
+| Real-time crypto monitoring (6 coins) | ✅ |
+| Modified Z-Score anomaly detection | ✅ |
+| Adaptive thresholds per coin | ✅ |
+| Confidence scoring (0-100%) | ✅ |
+| RSI, MACD, Bollinger Bands | ✅ |
+| Market context (bullish/bearish/mixed) | ✅ |
+| Action recommendations (BUY/SELL/HOLD) | ✅ |
+| PostgreSQL database storage | ✅ |
+| Backtesting schema ready | ✅ |
+| Email alerts (high confidence only) | ✅ |
+| Interactive Plotly/Dash dashboard | ✅ |
+| News headlines on anomalies | ⚠️ Beta |
+| Telegram alerts | 🔜 Next |
+| ML model (Isolation Forest) | 🔜 Next |
+
+
 ## 🎯 What This System Does
 
 Most anomaly detection systems stop at "something unusual happened." This platform goes further:
