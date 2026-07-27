@@ -95,26 +95,30 @@ def monitoring_worker(streamer, detector, alert_manager, dashboard, cfg, db):
                     print(f"   🎯 Action: {recommendation}")
                     
                     # Fetch related news
+                    # Fetch related news
                     headlines = []
                     if confidence >= 50:
                         try:
                             headlines = news_fetcher.get_news(symbol, limit=3)
-                            if headlines:
-                                print(f"   📰 Found {len(headlines)} news articles")
-                            else:
-                                search_terms = {
-                                    'BTC': 'bitcoin', 'ETH': 'ethereum', 'SOL': 'solana',
-                                    'DOGE': 'dogecoin', 'ADA': 'cardano', 'XRP': 'ripple'
-                                }
-                                search = search_terms.get(symbol, symbol.lower())
-                                headlines = [{
-                                    'title': f'Search "{symbol} crypto news" on Google News',
-                                    'url': f'https://news.google.com/search?q={search}+crypto&hl=en',
-                                    'published': '',
-                                    'sentiment': 0
-                                }]
                         except Exception as e:
                             print(f"   📰 News fetch error: {e}")
+                            headlines = []
+                        
+                        if not headlines:
+                            search_terms = {
+                                'BTC': 'bitcoin', 'ETH': 'ethereum', 'SOL': 'solana',
+                                'DOGE': 'dogecoin', 'ADA': 'cardano', 'XRP': 'ripple'
+                            }
+                            search = search_terms.get(symbol, symbol.lower())
+                            headlines = [{
+                                'title': f'Search "{symbol} crypto news" on Google News',
+                                'url': f'https://news.google.com/search?q={search}+crypto&hl=en',
+                                'published': '',
+                                'sentiment': 0
+                            }]
+                        
+                        if headlines:
+                            print(f"   📰 Found {len(headlines)} news articles")
                     
                     # Build anomaly data
                     anomaly_data = {

@@ -119,6 +119,7 @@ class NewsFetcher:
     
     def get_market_news(self, limit=3):
         """Fetch general crypto market news."""
+        headlines = []
         try:
             params = {
                 'kind': 'news',
@@ -135,7 +136,6 @@ class NewsFetcher:
             
             if response.status_code == 200:
                 data = response.json()
-                headlines = []
                 for post in data.get('results', [])[:limit]:
                     title = post.get('title', '')
                     url = post.get('url', '#')

@@ -138,7 +138,7 @@ class AnomalyDatabase:
         try:
             cursor = conn.cursor()
             
-            # Determine signal type from indicator_action
+            # Determine signal type
             indicator_action = str(anomaly_data.get('indicator_action', '')).upper()
             if 'BUY' in indicator_action:
                 signal_type = 'BUY'
@@ -146,47 +146,50 @@ class AnomalyDatabase:
                 signal_type = 'SELL'
             else:
                 signal_type = 'HOLD'
-
-            # Clean values - replace None and numpy values with proper Python types
+            
+            # Force ALL values to Python native types
             import numpy as np
             
             def clean(val):
-                """Convert numpy/pandas values to Python native types."""
+                """Convert ANY value to a PostgreSQL-safe Python type."""
                 if val is None:
                     return None
-                if isinstance(val, (np.integer,)):
-                    return int(val)
-                if isinstance(val, (np.floating,)):
+                # Handle numpy types
+                if isinstance(val, (np.generic,)):
                     if np.isnan(val) or np.isinf(val):
                         return None
-                    return float(val)
-                if isinstance(val, np.ndarray):
-                    return None
-                return val
+                    return val.item()  # Converts np.float64 → float, np.int64 → int
+                # Handle regular Python
+                if isinstance(val, float):
+                    return val
+                if isinstance(val, int):
+                    return val
+                # Everything else → string
+                return str(val)
             
             cursor.execute("""
                 INSERT INTO anomalies 
                 (symbol, detected_at, price, z_score, direction, 
-                 confidence, price_change_pct, market_context,
-                 recommendation, rsi, macd, indicator_action, 
-                 indicator_confidence, signal_type, price_at_signal)
+                confidence, price_change_pct, market_context,
+                recommendation, rsi, macd, indicator_action, 
+                indicator_confidence, signal_type, price_at_signal)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
-                anomaly_data.get('symbol'),
-                anomaly_data.get('timestamp'),
-                anomaly_data.get('current_price'),
-                anomaly_data.get('z_score'),
-                anomaly_data.get('direction'),
-                anomaly_data.get('confidence'),
-                anomaly_data.get('price_change_pct'),
-                anomaly_data.get('market_context'),
-                anomaly_data.get('recommendation'),
-                anomaly_data.get('rsi'),
-                anomaly_data.get('macd'),
-                indicator_action,
-                anomaly_data.get('indicator_confidence'),
-                signal_type,
-                anomaly_data.get('current_price')  # price_at_signal
+                clean(anomaly_data.get('symbol')),
+                clean(anomaly_data.get('timestamp')),
+                clean(anomaly_data.get('current_price')),
+                clean(anomaly_data.get('z_score')),
+                clean(anomaly_data.get('direction')),
+                clean(anomaly_data.get('confidence')),
+                clean(anomaly_data.get('price_change_pct')),
+                clean(anomaly_data.get('market_context')),
+                clean(anomaly_data.get('recommendation')),
+                clean(anomaly_data.get('rsi')),
+                clean(anomaly_data.get('macd')),
+                clean(indicator_action),
+                clean(anomaly_data.get('indicator_confidence')),
+                clean(signal_type),
+                clean(anomaly_data.get('current_price'))
             ))
             
             conn.commit()
